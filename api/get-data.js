@@ -1,8 +1,9 @@
 
-const { get } = require('@vercel/blob');
+
+import { get } from '@vercel/blob';
 
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const { blob } = await get('directorio_empleados_barceloneta.json');
@@ -12,10 +13,9 @@ module.exports = async function handler(req, res) {
       const data = await blob.text();
       return res.status(200).json(JSON.parse(data));
     } catch (error) {
-      console.error('Error en /api/get-data:', error);
       return res.status(500).json({ error: 'Error al leer datos del blob.', details: error.message });
     }
   } else {
     res.status(405).json({ error: 'Método no permitido' });
   }
-};
+}
