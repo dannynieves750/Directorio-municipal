@@ -1,10 +1,9 @@
-import { put } from '@vercel/blob';
+import { putBlob } from '@vercel/blob';
 
-export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const employees = req.body;
-      await put('directorio_empleados_barceloneta.json', JSON.stringify(employees), {
+      await putBlob('directorio_empleados_barceloneta.json', JSON.stringify(employees), {
         access: 'public',
         contentType: 'application/json',
       });
