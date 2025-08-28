@@ -1,12 +1,11 @@
 
 
-import { get } from '@vercel/blob';
+import { getBlob } from '@vercel/blob';
 
 
-export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const { blob } = await get('directorio_empleados_barceloneta.json');
+      const { blob } = await getBlob('directorio_empleados_barceloneta.json');
       if (!blob) {
         return res.status(200).json([]);
       }
