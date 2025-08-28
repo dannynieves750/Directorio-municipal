@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Directorio de Empleados - Municipio de Barceloneta</title>
-    <link rel="icon" href="logo-barceloneta.png" type="image/png">
+    <link rel="icon" type="image/png" href="logo-barceloneta.png">
     <style>
         * {
             margin: 0;
@@ -427,7 +427,6 @@
             
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #999;">
                 <strong>Oficina de Sistema de Información</strong><br>
-                👤 <strong>usuario</strong> / contraseña: <code>user123</code> (Solo lectura)
             </div>
         </div>
     </div>
@@ -445,7 +444,7 @@
     <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
         
         <!-- Logo PNG -->
-        <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120x;">
+    <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
 
         <div>
             <h1>Directorio de Empleados</h1>
@@ -475,9 +474,10 @@
             </div>
             <div class="btn-group" id="adminControls">
                 <button class="btn btn-primary" onclick="openModal()">➕ Agregar Empleado</button>
-                <button class="btn btn-success" onclick="exportData()">💾 Exportar Datos</button>
+                <button class="btn btn-success" onclick="exportData()">💾 Exportar Local</button>
                 <button class="btn btn-primary" onclick="document.getElementById('csvFileInput').click()">📂 Importar CSV</button>
                 <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="importCSV(event)">
+                <button class="btn btn-success" onclick="saveDataToServer()" style="background-color: #2a9d8f;">💾 Guardar Cambios</button>
                 <button class="btn btn-primary" onclick="loadSampleData()" style="font-size: 12px;">Cargar Ejemplo</button>
                 <button class="btn btn-danger" onclick="clearAllData()" style="font-size: 12px;">🗑️ Limpiar Todo</button>
             </div>
@@ -576,17 +576,26 @@
         // ============================================
 
         // Verificar si hay una sesión activa al cargar
-        window.onload = function() {
+        window.onload = async function() {
+            // Precargar los datos desde la API o el CSV antes de hacer nada más.
+            await loadInitialData();
+            
             const savedSession = sessionStorage.getItem('userSession');
             if (savedSession) {
                 const session = JSON.parse(savedSession);
-                if (isValidSession(session)) {
+                // Solo restaurar la sesión si es un admin
+                if (isValidSession(session) && session.role === 'admin') {
                     loginUser(session.username, session.role, session.name);
                     return;
                 }
             }
-            showLoginScreen();
+            // Para todos los demás casos, cargar la vista de invitado por defecto.
+            setupGuestUserView();
         };
+
+        function setupGuestUserView() {
+            loginUser('guest', 'user', 'Invitado');
+        }
 
         function isValidSession(session) {
             // Verificar si la sesión es válida (menos de 8 horas)
@@ -647,15 +656,26 @@
             // Actualizar información del usuario
             document.getElementById('currentUser').textContent = name;
             const roleSpan = document.getElementById('userRole');
-            roleSpan.textContent = role === 'admin' ? 'Administrador' : 'Solo Lectura';
+            const logoutBtn = document.querySelector('.logout-btn');
+
+            if (role === 'admin') {
+                roleSpan.textContent = 'Administrador';
+                logoutBtn.innerHTML = '🚪 Salir';
+            } else { // user or guest
+                roleSpan.textContent = 'Solo Lectura';
+                logoutBtn.innerHTML = '🔑 Acceder';
+            }
+            
             roleSpan.style.background = role === 'admin' ? '#a30000' : '#c8d8e4';
             roleSpan.style.color = role === 'admin' ? 'white' : '#2b6777';
             
             // Configurar permisos
             setupPermissions(role);
             
-            // Cargar empleados
-            loadEmployees();
+            // Los empleados ya están cargados, solo necesitamos mostrarlos.
+            displayEmployees();
+            updateFilters();
+            updateStats();
         }
 
         function setupPermissions(role) {
@@ -683,6 +703,13 @@
         }
 
         function logout() {
+            // Si no es un admin (es decir, es un invitado o usuario), ir directamente a la pantalla de login sin confirmación.
+            if (userRole !== 'admin') {
+                showLoginScreen();
+                return;
+            }
+            
+            // Para el admin, pedir confirmación.
             if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
                 sessionStorage.removeItem('userSession');
                 currentUser = null;
@@ -708,18 +735,47 @@
             }
         });
 
-        // Cargar datos al iniciar
-        function loadEmployees() {
-            const savedData = localStorage.getItem('companyEmployees');
-            if (savedData) {
-                employees = JSON.parse(savedData);
+        async function loadInitialData() {
+            try {
+                // 1. Intentar obtener datos desde la API (Vercel Blob)
+                const response = await fetch('/api/get-data');
+                if (!response.ok) {
+                    throw new Error(`Error de la API: ${response.statusText}`);
+                }
+                let data = await response.json();
+
+                // 2. Si Blob está vacío, leer el CSV local y subirlo
+                if (!Array.isArray(data) || data.length === 0) {
+                    console.log("Vercel Blob está vacío. Intentando poblar desde el archivo CSV local...");
+                    const csvResponse = await fetch('/directorio_empleados_barceloneta.csv');
+                    if (csvResponse.ok) {
+                        const csvText = await csvResponse.text();
+                        parseCSVData(csvText, true); // llena 'employees'
+                        // Subir los datos iniciales a Vercel Blob
+                        await saveDataToServer(true); // true para indicar que es la carga inicial
+                        console.log("Datos del CSV subidos a Vercel Blob.");
+                    } else {
+                        console.warn("No se encontró el archivo CSV local. La aplicación comenzará con cero empleados.");
+                        employees = [];
+                    }
+                } else {
+                    // Si la API devolvió datos, esos son nuestros empleados
+                    employees = data;
+                }
+            } catch (error) {
+                console.error("Error cargando los datos iniciales:", error);
+                // Como fallback final, intentar cargar desde localStorage
+                const savedData = localStorage.getItem('companyEmployees');
+                if (savedData) {
+                    employees = JSON.parse(savedData);
+                } else {
+                    employees = [];
+                }
             }
-            displayEmployees();
-            updateFilters();
-            updateStats();
         }
 
         function saveEmployees() {
+            // Esta función ahora solo guarda en el respaldo local (localStorage)
             localStorage.setItem('companyEmployees', JSON.stringify(employees));
             updateStats();
         }
@@ -915,11 +971,11 @@
             reader.readAsText(file);
         }
 
-        function parseCSVData(csv) {
+        function parseCSVData(csv, isInitialLoad = false) {
             try {
                 const lines = csv.split('\n');
                 if (lines.length < 2) {
-                    alert('El archivo CSV debe tener al menos una fila de encabezados y una fila de datos.');
+                    if (!isInitialLoad) alert('El archivo CSV debe tener al menos una fila de encabezados y una fila de datos.');
                     return;
                 }
 
@@ -965,7 +1021,6 @@
                         });
 
                         if (employee.firstName && employee.lastName && employee.phone) {
-                            
                             const exists = employee.email && employees.some(emp => emp.email && emp.email.toLowerCase() === employee.email.toLowerCase());
                             if (!exists) {
                                 importedEmployees.push(employee);
@@ -981,19 +1036,27 @@
                     }
                 }
 
-                if (importedEmployees.length > 0) {
-                    if (confirm(`Se encontraron ${successCount} empleados válidos para importar${errorCount > 0 ? ` y ${errorCount} registros con errores` : ''}.\n\n¿Desea proceder con la importación?`)) {
-                        employees.push(...importedEmployees);
-                        saveEmployees();
-                        displayEmployees();
-                        updateFilters();
-                        alert(`✅ Importación completada:\n• ${successCount} empleados importados correctamente${errorCount > 0 ? `\n• ${errorCount} registros omitidos por errores` : ''}`);
-                    }
+                if (isInitialLoad) {
+                    employees = importedEmployees;
+                    displayEmployees();
+                    updateFilters();
+                    updateStats();
+                    saveEmployees();
                 } else {
-                    alert('❌ No se encontraron empleados válidos para importar.\n\nVerifique que el archivo CSV tenga las columnas: Nombre, Apellido, Email, Teléfono, Departamento, Puesto');
+                    if (importedEmployees.length > 0) {
+                        if (confirm(`Se encontraron ${successCount} empleados válidos para importar${errorCount > 0 ? ` y ${errorCount} registros con errores` : ''}.\n\n¿Desea proceder con la importación?`)) {
+                            employees.push(...importedEmployees);
+                            saveEmployees();
+                            displayEmployees();
+                            updateFilters();
+                            alert(`✅ Importación completada:\n• ${successCount} empleados importados correctamente${errorCount > 0 ? `\n• ${errorCount} registros omitidos por errores` : ''}`);
+                        }
+                    } else {
+                        alert('❌ No se encontraron empleados válidos para importar.\n\nVerifique que el archivo CSV tenga las columnas: Nombre, Apellido, Email, Teléfono, Departamento, Puesto');
+                    }
                 }
             } catch (error) {
-                alert('❌ Error al procesar el archivo CSV. Verifique que el formato sea correcto.');
+                if (!isInitialLoad) alert('❌ Error al procesar el archivo CSV. Verifique que el formato sea correcto.');
                 console.error('Error parsing CSV:', error);
             }
             
@@ -1041,6 +1104,44 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        }
+
+        async function saveDataToServer(isInitialLoad = false) {
+            if (!isInitialLoad && !checkPermission('save')) return;
+
+            if (!isInitialLoad && !confirm('¿Estás seguro de que quieres sobrescribir los datos en el servidor con los datos actuales? Esta acción es irreversible.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/save-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    // Enviamos el array de empleados directamente
+                    body: JSON.stringify(employees) 
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    if (!isInitialLoad) {
+                        alert('✅ ¡Éxito! Los datos han sido guardados en el servidor.');
+                    }
+                    // Guardamos también en el respaldo local para consistencia
+                    saveEmployees();
+                } else {
+                    if (!isInitialLoad) {
+                        alert(`❌ Error al guardar los datos en el servidor.\n\nDetalle: ${result.message}`);
+                    }
+                }
+            } catch (error) {
+                console.error('Error al contactar el servidor:', error);
+                if (!isInitialLoad) {
+                    alert('❌ Error de conexión. No se pudo contactar al servidor para guardar los datos.');
+                }
+            }
         }
 
         function loadSampleData() {
@@ -1114,33 +1215,6 @@ function reportCorrections() {
                 closeModal();
             }
         }
-    <script>
-async function tryFetchCSV() {
-  try {
-    // Intenta leer el CSV del servidor (sin cache para ver cambios al redeploy)
-    const res = await fetch('empleados.csv', { cache: 'no-store' }); // o 'data/empleados.csv'
-    if (!res.ok) return; // si no está el archivo, salimos sin error
-    let text = await res.text();
-    // Quita BOM si viene de Excel
-    text = text.replace(/^\uFEFF/, '');
-    // Reutilizamos tu parser existente para poblar "employees" y localStorage
-    parseCSVData(text);
-  } catch (e) {
-    console.warn('No se pudo cargar empleados.csv automáticamente', e);
-  }
-}
-
-// Modifica loadEmployees para que, si está vacío, pruebe el CSV del servidor
-const _loadEmployees_original = loadEmployees;
-loadEmployees = async function () {
-  // carga normal desde localStorage
-  _loadEmployees_original();
-
-  // si no hay datos locales, intenta el CSV
-  if (!employees || employees.length === 0) {
-    await tryFetchCSV();
-  }
-};
-</script>
+    </script>
 </body>
 </html>
