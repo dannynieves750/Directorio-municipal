@@ -747,7 +747,7 @@
                 // 2. Si Blob está vacío, leer el CSV local y subirlo
                 if (!Array.isArray(data) || data.length === 0) {
                     console.log("Vercel Blob está vacío. Intentando poblar desde el archivo CSV local...");
-                    const csvResponse = await fetch('directorio_empleados_barceloneta.csv');
+                    const csvResponse = await fetch('/directorio_empleados_barceloneta.csv');
                     if (csvResponse.ok) {
                         const csvText = await csvResponse.text();
                         parseCSVData(csvText, true); // llena 'employees'
