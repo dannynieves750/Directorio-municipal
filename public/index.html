@@ -736,35 +736,41 @@
         });
 
         async function loadInitialData() {
+            let dataLoaded = false;
+            // 1. Intentar obtener datos desde la API (Vercel Blob)
             try {
-                // 1. Intentar obtener datos desde la API (Vercel Blob)
                 const response = await fetch('/api/get-data');
-                if (!response.ok) {
-                    throw new Error(`Error de la API: ${response.statusText}`);
+                if (response.ok) {
+                    let data = await response.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        employees = data;
+                        dataLoaded = true;
+                    }
                 }
-                let data = await response.json();
+            } catch (error) {
+                console.warn("API no disponible, intentando cargar CSV local...");
+            }
 
-                // 2. Si Blob está vacío, leer el CSV local y subirlo
-                if (!Array.isArray(data) || data.length === 0) {
-                    console.log("Vercel Blob está vacío. Intentando poblar desde el archivo CSV local...");
+            // 2. Si no se cargó data de la API, leer el CSV local
+            if (!dataLoaded) {
+                try {
                     const csvResponse = await fetch('/directorio_empleados_barceloneta.csv');
                     if (csvResponse.ok) {
                         const csvText = await csvResponse.text();
                         parseCSVData(csvText, true); // llena 'employees'
-                        // Subir los datos iniciales a Vercel Blob
-                        await saveDataToServer(true); // true para indicar que es la carga inicial
-                        console.log("Datos del CSV subidos a Vercel Blob.");
+                        dataLoaded = true;
                     } else {
                         console.warn("No se encontró el archivo CSV local. La aplicación comenzará con cero empleados.");
                         employees = [];
                     }
-                } else {
-                    // Si la API devolvió datos, esos son nuestros empleados
-                    employees = data;
+                } catch (error) {
+                    console.error("Error cargando el CSV local:", error);
+                    employees = [];
                 }
-            } catch (error) {
-                console.error("Error cargando los datos iniciales:", error);
-                // Como fallback final, intentar cargar desde localStorage
+            }
+
+            // 3. Si tampoco hay datos, intentar cargar desde localStorage
+            if (!dataLoaded) {
                 const savedData = localStorage.getItem('companyEmployees');
                 if (savedData) {
                     employees = JSON.parse(savedData);

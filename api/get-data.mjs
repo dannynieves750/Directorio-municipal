@@ -4,8 +4,6 @@
 import { getBlob } from '@vercel/blob';
 
 export default async function handler(req, res) {
-
-
   if (req.method === 'GET') {
     try {
       const { blob } = await getBlob('directorio_empleados_barceloneta.json');
