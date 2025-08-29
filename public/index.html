@@ -782,7 +782,9 @@
                     if (csvResponse.ok) {
                         const csvText = await csvResponse.text();
                         parseCSVData(csvText, true); // llena 'employees'
-                        dataLoaded = true;
+                        if (employees.length > 0) {
+                            dataLoaded = true;
+                        }
                     } else {
                         console.warn("No se encontró el archivo CSV local. La aplicación comenzará con cero empleados.");
                         employees = [];
