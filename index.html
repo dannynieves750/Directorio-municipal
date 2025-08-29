@@ -386,6 +386,13 @@
             color: #fff;
         }
 
+        .loading-message {
+            text-align: center;
+            padding: 50px;
+            color: #8d99ae;
+            font-style: italic;
+        }
+
         @media (max-width: 768px) {
             .search-bar {
                 flex-direction: column;
@@ -422,7 +429,7 @@
             </div>
             <input type="text" id="loginUser" class="login-input" placeholder="Usuario" autocomplete="username">
             <input type="password" id="loginPassword" class="login-input" placeholder="Contraseña" autocomplete="current-password">
-            <button class="login-btn" onclick="attemptLogin()"> LOG IN</button>
+            <button class="login-btn" onclick="attemptLogin()">LOGIN</button>
             <div id="loginError" style="color: red; margin-top: 10px; display: none;"></div>
             
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #999;">
@@ -445,7 +452,7 @@
     <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
         
         <!-- Logo PNG -->
-        <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120x;">
+        <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
 
         <div>
             <h1>Directorio de Empleados</h1>
@@ -482,14 +489,13 @@
                 <button class="btn btn-danger" onclick="clearAllData()" style="font-size: 12px;">🗑️ Limpiar Todo</button>
             </div>
             <div class="btn-group" id="userControls" style="display: none;">
-                <button class="btn btn-report" onclick="reportCorrections()">📧 Solicitar Correcciones</button>
+                <button class="btn btn-report" onclick="reportCorrections()">🔧 Solicitar Correcciones</button>
             </div>
         </div>
 
         <div class="employee-grid" id="employeeGrid">
-            <div style="text-align: center; grid-column: 1/-1; padding: 50px; color: #999;">
-                <h3>No hay empleados registrados</h3>
-                <p>Haz clic en "Agregar Empleado" para comenzar</p>
+            <div class="loading-message">
+                Cargando datos...
             </div>
         </div>
     </div>
@@ -637,7 +643,7 @@
             errorDiv.style.display = 'block';
         }
 
-        function loginUser(username, role, name) {
+        async function loginUser(username, role, name) {
             currentUser = username;
             userRole = role;
             
@@ -655,7 +661,7 @@
             setupPermissions(role);
             
             // Cargar empleados
-            loadEmployees();
+            await loadEmployees();
         }
 
         function setupPermissions(role) {
@@ -708,12 +714,62 @@
             }
         });
 
+        // Función para cargar CSV automáticamente desde el servidor
+        async function tryFetchCSV() {
+            try {
+                console.log('Intentando cargar empleados.csv...');
+                const response = await fetch('./empleados.csv', { 
+                    cache: 'no-store',
+                    headers: {
+                        'Accept': 'text/csv,text/plain,*/*'
+                    }
+                });
+                
+                if (!response.ok) {
+                    console.log('No se encontró empleados.csv en el servidor');
+                    return false;
+                }
+                
+                let csvText = await response.text();
+                // Remover BOM si existe
+                csvText = csvText.replace(/^\uFEFF/, '');
+                
+                if (csvText.trim()) {
+                    console.log('CSV encontrado, procesando datos...');
+                    await parseCSVData(csvText, true); // true = modo automático
+                    return true;
+                }
+            } catch (error) {
+                console.log('Error al cargar CSV:', error.message);
+            }
+            return false;
+        }
+
         // Cargar datos al iniciar
-        function loadEmployees() {
+        async function loadEmployees() {
+            console.log('Cargando empleados...');
+            
+            // Primero cargar datos del localStorage
             const savedData = localStorage.getItem('companyEmployees');
             if (savedData) {
-                employees = JSON.parse(savedData);
+                try {
+                    employees = JSON.parse(savedData);
+                    console.log('Datos cargados desde localStorage:', employees.length, 'empleados');
+                } catch (error) {
+                    console.error('Error parsing localStorage data:', error);
+                    employees = [];
+                }
             }
+            
+            // Si no hay datos locales, intentar cargar desde CSV
+            if (!employees || employees.length === 0) {
+                console.log('No hay datos locales, intentando cargar CSV...');
+                const csvLoaded = await tryFetchCSV();
+                if (!csvLoaded) {
+                    console.log('No se pudo cargar CSV, mostrando mensaje vacío');
+                }
+            }
+            
             displayEmployees();
             updateFilters();
             updateStats();
@@ -731,8 +787,8 @@
             if (employeesToShow.length === 0) {
                 grid.innerHTML = `
                     <div style="text-align: center; grid-column: 1/-1; padding: 50px; color: #999;">
-                        <h3>No hay empleados que coincidan</h3>
-                        <p>Intenta ajustar los filtros de búsqueda</p>
+                        <h3>No hay empleados registrados</h3>
+                        <p>Haz clic en "Agregar Empleado" para comenzar o contacta al administrador</p>
                     </div>
                 `;
                 return;
@@ -843,304 +899,3 @@
         }
 
         function deleteEmployee(index) {
-            if (!checkPermission('delete')) return;
-            if (confirm('¿Estás seguro de que quieres eliminar este empleado?')) {
-                employees.splice(index, 1);
-                saveEmployees();
-                displayEmployees();
-                updateFilters();
-                alert('Empleado eliminado correctamente');
-            }
-        }
-
-        function updateFilters() {
-            const departmentFilter = document.getElementById('departmentFilter');
-            const positionFilter = document.getElementById('positionFilter');
-            
-            const departments = [...new Set(employees.map(emp => emp.department))];
-            const positions = [...new Set(employees.map(emp => emp.position))];
-            
-            departmentFilter.innerHTML = '<option value="">Todos los departamentos</option>' +
-                departments.map(dept => `<option value="${dept}">${dept}</option>`).join('');
-            
-            positionFilter.innerHTML = '<option value="">Todos los puestos</option>' +
-                positions.map(pos => `<option value="${pos}">${pos}</option>`).join('');
-        }
-
-        function updateStats() {
-            document.getElementById('totalEmployees').textContent = employees.length;
-            const departments = new Set(employees.map(emp => emp.department));
-            document.getElementById('totalDepartments').textContent = departments.size;
-        }
-
-        function filterEmployees() {
-            const removeAccents = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const searchTerm = removeAccents(document.getElementById('searchInput').value.toLowerCase());
-            const departmentFilter = document.getElementById('departmentFilter').value;
-            const positionFilter = document.getElementById('positionFilter').value;
-
-            const filtered = employees.filter(employee => {
-                const matchesSearch = !searchTerm || 
-                    removeAccents(employee.firstName.toLowerCase()).includes(searchTerm) ||
-                    removeAccents(employee.lastName.toLowerCase()).includes(searchTerm) ||
-                    removeAccents(employee.email.toLowerCase()).includes(searchTerm) ||
-                    removeAccents(employee.department.toLowerCase()).includes(searchTerm) ||
-                    employee.phone.includes(searchTerm);
-                
-                const matchesDepartment = !departmentFilter || employee.department === departmentFilter;
-                const matchesPosition = !positionFilter || employee.position === positionFilter;
-                
-                return matchesSearch && matchesDepartment && matchesPosition;
-            });
-
-            displayEmployees(filtered);
-        }
-
-        // Event listeners para filtros
-        document.getElementById('searchInput').addEventListener('input', filterEmployees);
-        document.getElementById('departmentFilter').addEventListener('change', filterEmployees);
-        document.getElementById('positionFilter').addEventListener('change', filterEmployees);
-
-        function importCSV(event) {
-            if (!checkPermission('import')) return;
-            
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const csv = e.target.result;
-                parseCSVData(csv);
-            };
-            reader.readAsText(file);
-        }
-
-        function parseCSVData(csv) {
-            try {
-                const lines = csv.split('\n');
-                if (lines.length < 2) {
-                    alert('El archivo CSV debe tener al menos una fila de encabezados y una fila de datos.');
-                    return;
-                }
-
-                const separator = csv.includes(';') ? ';' : ',';
-                const headers = lines[0].split(separator).map(h => h.trim().replace(/"/g, '').toLowerCase());
-                
-                const importedEmployees = [];
-                let successCount = 0;
-                let errorCount = 0;
-
-                for (let i = 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-
-                    const values = parseCSVLine(line, separator);
-                    
-                    if (values.length < headers.length) {
-                        errorCount++;
-                        continue;
-                    }
-
-                    try {
-                        const employee = {};
-                        
-                        headers.forEach((header, index) => {
-                            const value = values[index] ? values[index].trim() : '';
-                            
-                            if (header.includes('nombre') && !header.includes('apellido')) {
-                                employee.firstName = value;
-                            } else if (header.includes('apellido') || header.includes('apellidos')) {
-                                employee.lastName = value;
-                            } else if (header.includes('email') || header.includes('correo')) {
-                                employee.email = value;
-                            } else if (header.includes('teléfono') || header.includes('telefono') || header.includes('phone')) {
-                                employee.phone = value;
-                            } else if (header.includes('departamento') || header.includes('department') || header.includes('depto')) {
-                                employee.department = value;
-                            } else if (header.includes('puesto') || header.includes('cargo') || header.includes('position') || header.includes('título')) {
-                                employee.position = value;
-                            } else if (header.includes('extensión') || header.includes('extension') || header.includes('ext')) {
-                                employee.extension = value;
-                            }
-                        });
-
-                        if (employee.firstName && employee.lastName && employee.phone) {
-                            
-                            const exists = employee.email && employees.some(emp => emp.email && emp.email.toLowerCase() === employee.email.toLowerCase());
-                            if (!exists) {
-                                importedEmployees.push(employee);
-                                successCount++;
-                            } else {
-                                errorCount++;
-                            }
-                        } else {
-                            errorCount++;
-                        }
-                    } catch (error) {
-                        errorCount++;
-                    }
-                }
-
-                if (importedEmployees.length > 0) {
-                    if (confirm(`Se encontraron ${successCount} empleados válidos para importar${errorCount > 0 ? ` y ${errorCount} registros con errores` : ''}.\n\n¿Desea proceder con la importación?`)) {
-                        employees.push(...importedEmployees);
-                        saveEmployees();
-                        displayEmployees();
-                        updateFilters();
-                        alert(`✅ Importación completada:\n• ${successCount} empleados importados correctamente${errorCount > 0 ? `\n• ${errorCount} registros omitidos por errores` : ''}`);
-                    }
-                } else {
-                    alert('❌ No se encontraron empleados válidos para importar.\n\nVerifique que el archivo CSV tenga las columnas: Nombre, Apellido, Email, Teléfono, Departamento, Puesto');
-                }
-            } catch (error) {
-                alert('❌ Error al procesar el archivo CSV. Verifique que el formato sea correcto.');
-                console.error('Error parsing CSV:', error);
-            }
-            
-            document.getElementById('csvFileInput').value = '';
-        }
-
-        function parseCSVLine(line, separator) {
-            const values = [];
-            let current = '';
-            let inQuotes = false;
-            
-            for (let i = 0; i < line.length; i++) {
-                const char = line[i];
-                
-                if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === separator && !inQuotes) {
-                    values.push(current.trim().replace(/^"|"$/g, ''));
-                    current = '';
-                } else {
-                    current += char;
-                }
-            }
-            
-            values.push(current.trim().replace(/^"|"$/g, ''));
-            return values;
-        }
-
-        function exportData() {
-            if (employees.length === 0) {
-                alert('No hay datos para exportar');
-                return;
-            }
-
-            const csvContent = "data:text/csv;charset=utf-8," 
-                + "Nombre,Apellido,Email,Teléfono,Departamento,Puesto,Extensión\n"
-                + employees.map(emp => 
-                    `"${emp.firstName}","${emp.lastName}","${emp.email}","${emp.phone}","${emp.department}","${emp.position}","${emp.extension || ''}"`
-                ).join('\n');
-
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "directorio_empleados_barceloneta.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function loadSampleData() {
-            if (!checkPermission('import')) return;
-            
-            if (confirm('¿Cargar datos de ejemplo? Esto agregará empleados de muestra.')) {
-                const sampleData = [
-                    {
-                        firstName: "María", lastName: "González",
-                        email: "maria.gonzalez@barceloneta.gov.pr", phone: "787-555-0101",
-                        department: "Recursos Humanos", position: "Gerente de RRHH",
-                        extension: "101"
-                    },
-                    {
-                        firstName: "Carlos", lastName: "Rodríguez",
-                        email: "carlos.rodriguez@barceloneta.gov.pr", phone: "787-555-0102",
-                        department: "Sistemas", position: "Desarrollador Senior",
-                        extension: "201"
-                    },
-                    {
-                        firstName: "Ana", lastName: "López",
-                        email: "ana.lopez@barceloneta.gov.pr", phone: "787-555-0103",
-                        department: "Administración", position: "Secretaria Ejecutiva",
-                        extension: "301"
-                    },
-                    {
-                        firstName: "Luis", lastName: "Martínez",
-                        email: "luis.martinez@barceloneta.gov.pr", phone: "787-555-0104",
-                        department: "Finanzas", position: "Contador Municipal",
-                        extension: "401"
-                    },
-                    {
-                        firstName: "Patricia", lastName: "Hernández",
-                        email: "patricia.hernandez@barceloneta.gov.pr", phone: "787-555-0105",
-                        department: "Obras Públicas", position: "Ingeniera",
-                        extension: "501"
-                    }
-                ];
-
-                employees.push(...sampleData);
-                saveEmployees();
-                displayEmployees();
-                updateFilters();
-                alert('Datos de ejemplo cargados correctamente');
-            }
-        }
-        function clearAllData() {
-    if (!checkPermission('clear')) return;
-    
-    if (confirm('⚠️ ¿Eliminar TODOS los empleados? Esta acción no se puede deshacer.')) {
-        localStorage.removeItem('companyEmployees');
-        employees = [];
-        displayEmployees();
-        updateFilters();
-        updateStats();
-        alert('Todos los datos han sido eliminados.');
-    }
-}
-
-function reportCorrections() {
-    const to = 'lnieves@barceloneta.pr.gov';
-    const cc = 'ebatista@barceloneta.pr.gov';
-    const subject = 'Solicitud de corrección';
-    window.location.href = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}`;
-}
-
-        // Cerrar modal al hacer clic fuera de él
-        window.onclick = function(event) {
-            const modal = document.getElementById('employeeModal');
-            if (event.target === modal) {
-                closeModal();
-            }
-        }
-    <script>
-async function tryFetchCSV() {
-  try {
-    // Intenta leer el CSV del servidor (sin cache para ver cambios al redeploy)
-    const res = await fetch('empleados.csv', { cache: 'no-store' }); // o 'data/empleados.csv'
-    if (!res.ok) return; // si no está el archivo, salimos sin error
-    let text = await res.text();
-    // Quita BOM si viene de Excel
-    text = text.replace(/^\uFEFF/, '');
-    // Reutilizamos tu parser existente para poblar "employees" y localStorage
-    parseCSVData(text);
-  } catch (e) {
-    console.warn('No se pudo cargar empleados.csv automáticamente', e);
-  }
-}
-
-// Modifica loadEmployees para que, si está vacío, pruebe el CSV del servidor
-const _loadEmployees_original = loadEmployees;
-loadEmployees = async function () {
-  // carga normal desde localStorage
-  _loadEmployees_original();
-
-  // si no hay datos locales, intenta el CSV
-  if (!employees || employees.length === 0) {
-    await tryFetchCSV();
-  }
-};
-</script>
-</body>
-</html>
