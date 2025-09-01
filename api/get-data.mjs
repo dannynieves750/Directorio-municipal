@@ -1,41 +1,25 @@
+// filepath: /api/get-data.mjs
 import { get } from '@vercel/blob';
 
-export const config = {
-  runtime: 'edge',
-};
+export default async function handler(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Método no permitido' });
+  }
 
-export default async function handler(request) {
   try {
-    const { url } = request;
     const blob = await get('directorio_empleados_barceloneta.json', {
       token: process.env.BLOB_READ_WRITE_TOKEN
     });
     
     if (!blob) {
-      return new Response(
-        JSON.stringify([]),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return res.status(200).json([]);
     }
 
     const data = await blob.text();
-    return new Response(
-      data,
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(200).send(data);
+
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: 'Error al leer datos del blob.', details: error.message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return res.status(500).json({ error: 'Error al leer datos del blob.', details: error.message });
   }
 }
