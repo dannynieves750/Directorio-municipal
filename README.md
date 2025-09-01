@@ -5,8 +5,8 @@ Este proyecto es un directorio de empleados para el Municipio de Barceloneta, li
 ## Estructura
 - `index.html`: Interfaz principal, incluye todo el frontend y lógica JS.
 - `directorio_empleados_barceloneta.csv`: Archivo CSV con los datos iniciales de empleados.
-- `/api/get-data.js`: API para leer empleados desde Vercel Blob.
-- `/api/save-data.js`: API para guardar empleados en Vercel Blob.
+- `/api/get-data.mjs`: API para leer empleados desde Vercel Blob.
+- `/api/save-data.mjs`: API para guardar empleados en Vercel Blob.
 
 ## Primer despliegue
 - Si no hay datos en la nube, el sistema subirá automáticamente el CSV inicial a Vercel Blob.
