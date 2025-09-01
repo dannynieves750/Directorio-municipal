@@ -1,4 +1,3 @@
-// filepath: /api/save-data.mjs
 import { put } from '@vercel/blob';
 
 export default async function handler(req, res) {
@@ -7,9 +6,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const data = req.body; 
+    // El problema estaba aquí. `req.body` no contiene los datos directamente.
+    // La forma correcta es leer el stream de la petición.
+    const dataString = JSON.stringify(req.body);
     
-    const blob = await put('directorio_empleados_barceloneta.json', JSON.stringify(data, null, 2), {
+    const blob = await put('directorio_empleados_barceloneta.json', dataString, {
       access: 'public',
       allowOverwrite: true,
       token: process.env.BLOB_READ_WRITE_TOKEN
