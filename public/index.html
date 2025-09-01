@@ -441,19 +441,15 @@
         </div>
 
        <div class="header">
-    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
-        
-        <!-- Logo PNG -->
-    <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
-
-        <div>
-            <h1>Directorio de Empleados</h1>
-            <h2>Municipio de Barceloneta</h2>
-            <p>Sistema de gestión de contactos municipales</p>
+            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
+                <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
+                <div>
+                    <h1>Directorio de Empleados</h1>
+                    <h2>Municipio de Barceloneta</h2>
+                    <p>Sistema de gestión de contactos municipales</p>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
-
 
         <div class="stats">
             <p>Total de empleados: <span id="totalEmployees">0</span> | Departamentos: <span id="totalDepartments">0</span></p>
@@ -534,10 +530,6 @@
                 </div>
             </form>
         </div>
-    </div>
-    <!-- Modal para agregar/editar empleado -->
-    <div id="employeeModal" class="modal">
-        // ... (contenido del modal) ...
     </div>
 
     <script>
@@ -658,7 +650,6 @@
             
             setupPermissions(role);
             
-            // Cargar los datos iniciales y mostrar los empleados
             await loadInitialData();
         }
 
@@ -856,8 +847,8 @@
             const departmentFilter = document.getElementById('departmentFilter');
             const positionFilter = document.getElementById('positionFilter');
             
-            const departments = [...new Set(employees.map(emp => emp.department))];
-            const positions = [...new Set(employees.map(emp => emp.position))];
+            const departments = [...new Set(employees.map(emp => emp.department))].filter(Boolean);
+            const positions = [...new Set(employees.map(emp => emp.position))].filter(Boolean);
             
             departmentFilter.innerHTML = '<option value="">Todos los departamentos</option>' +
                 departments.sort().map(dept => `<option value="${dept}">${dept}</option>`).join('');
@@ -868,7 +859,7 @@
 
         function updateStats() {
             document.getElementById('totalEmployees').textContent = employees.length;
-            const departments = new Set(employees.map(emp => emp.department));
+            const departments = new Set(employees.map(emp => emp.department).filter(Boolean));
             document.getElementById('totalDepartments').textContent = departments.size;
         }
 
@@ -908,11 +899,93 @@
         }
 
         function parseCSVData(csv, isInitialLoad = false) {
-            // ... (código de parseCSVData sin cambios)
+            try {
+                const lines = csv.split('\n');
+                if (lines.length < 2) {
+                    if (!isInitialLoad) alert('El archivo CSV debe tener al menos una fila de encabezados y una de datos.');
+                    return;
+                }
+
+                const separator = csv.includes(';') ? ';' : ',';
+                const headers = lines[0].split(separator).map(h => h.trim().replace(/"/g, '').toLowerCase());
+                
+                const importedEmployees = [];
+                let successCount = 0;
+                let errorCount = 0;
+
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+
+                    const values = parseCSVLine(line, separator);
+                    if (values.length < headers.length) {
+                        errorCount++;
+                        continue;
+                    }
+
+                    try {
+                        const employee = {};
+                        headers.forEach((header, index) => {
+                            const value = values[index] ? values[index].trim() : '';
+                            if (header.includes('nombre') && !header.includes('apellido')) employee.firstName = value;
+                            else if (header.includes('apellido')) employee.lastName = value;
+                            else if (header.includes('email')) employee.email = value;
+                            else if (header.includes('teléfono')) employee.phone = value;
+                            else if (header.includes('departamento')) employee.department = value;
+                            else if (header.includes('puesto')) employee.position = value;
+                            else if (header.includes('extensión')) employee.extension = value;
+                        });
+
+                        if (employee.firstName && employee.lastName) {
+                            importedEmployees.push(employee);
+                            successCount++;
+                        } else {
+                            errorCount++;
+                        }
+                    } catch (error) {
+                        errorCount++;
+                    }
+                }
+
+                if (isInitialLoad) {
+                    employees = importedEmployees;
+                } else {
+                    if (importedEmployees.length > 0) {
+                        if (confirm(`Se encontraron ${successCount} empleados válidos. ¿Desea importarlos?`)) {
+                            employees.push(...importedEmployees);
+                            saveEmployees();
+                            displayEmployees();
+                            updateFilters();
+                            alert(`✅ ${successCount} empleados importados.`);
+                        }
+                    } else {
+                        alert('❌ No se encontraron empleados válidos para importar.');
+                    }
+                }
+            } catch (error) {
+                if (!isInitialLoad) alert('❌ Error al procesar el archivo CSV.');
+                console.error('Error parsing CSV:', error);
+            }
+            document.getElementById('csvFileInput').value = '';
         }
 
         function parseCSVLine(line, separator) {
-            // ... (código de parseCSVLine sin cambios)
+            const values = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === separator && !inQuotes) {
+                    values.push(current.trim().replace(/^"|"$/g, ''));
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            values.push(current.trim().replace(/^"|"$/g, ''));
+            return values;
         }
 
         function exportData() {
@@ -953,10 +1026,9 @@
                 if (result.success) {
                     if (!isInitialLoad) {
                         alert('✅ ¡Éxito! Los datos han sido guardados en el servidor.');
-                        // Después de guardar, recargamos los datos para asegurar consistencia
-                        await loadInitialData(); // <-- CORREGIDO
+                        await loadInitialData();
                     }
-                    saveEmployees(); // Guardar respaldo local
+                    saveEmployees();
                 } else {
                     if (!isInitialLoad) {
                         alert(`❌ Error al guardar los datos en el servidor.\n\nDetalle: ${result.message}`);
@@ -971,11 +1043,31 @@
         }
 
         function loadSampleData() {
-            // ... (código de loadSampleData sin cambios)
+            if (!checkPermission('import')) return;
+            if (confirm('¿Cargar datos de ejemplo? Esto agregará empleados de muestra.')) {
+                const sampleData = [
+                    { firstName: "María", lastName: "González", email: "maria.gonzalez@barceloneta.gov.pr", phone: "787-555-0101", department: "Recursos Humanos", position: "Gerente de RRHH", extension: "101" },
+                    { firstName: "Carlos", lastName: "Rodríguez", email: "carlos.rodriguez@barceloneta.gov.pr", phone: "787-555-0102", department: "Sistemas", position: "Desarrollador Senior", extension: "201" },
+                    { firstName: "Ana", lastName: "López", email: "ana.lopez@barceloneta.gov.pr", phone: "787-555-0103", department: "Administración", position: "Secretaria Ejecutiva", extension: "301" }
+                ];
+                employees.push(...sampleData);
+                saveEmployees();
+                displayEmployees();
+                updateFilters();
+                alert('Datos de ejemplo cargados.');
+            }
         }
 
         function clearAllData() {
-            // ... (código de clearAllData sin cambios)
+            if (!checkPermission('clear')) return;
+            if (confirm('⚠️ ¿Eliminar TODOS los empleados? Esta acción no se puede deshacer.')) {
+                localStorage.removeItem('companyEmployees');
+                employees = [];
+                displayEmployees();
+                updateFilters();
+                updateStats();
+                alert('Todos los datos han sido eliminados.');
+            }
         }
 
         function reportCorrections() {
