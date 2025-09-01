@@ -1,21 +1,41 @@
-
-
-
 import { get } from '@vercel/blob';
 
-export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    try {
-      const { blob } = await get('directorio_empleados_barceloneta.json');
-      if (!blob) {
-        return res.status(200).json([]);
-      }
-      const data = await blob.text();
-      return res.status(200).json(JSON.parse(data));
-    } catch (error) {
-      return res.status(500).json({ error: 'Error al leer datos del blob.', details: error.message });
+export const config = {
+  runtime: 'edge',
+};
+
+export default async function handler(request) {
+  try {
+    const { url } = request;
+    const blob = await get('directorio_empleados_barceloneta.json', {
+      token: process.env.BLOB_READ_WRITE_TOKEN
+    });
+    
+    if (!blob) {
+      return new Response(
+        JSON.stringify([]),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     }
-  } else {
-    res.status(405).json({ error: 'Método no permitido' });
+
+    const data = await blob.text();
+    return new Response(
+      data,
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: 'Error al leer datos del blob.', details: error.message }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
 }
