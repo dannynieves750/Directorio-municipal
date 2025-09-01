@@ -737,11 +737,11 @@
 
         async function loadInitialData() {
             let dataLoaded = false;
-            // 1. Intentar obtener datos desde el JSON estático
+            // 1. Intentar obtener datos desde la API (Vercel Blob)
             try {
-                const jsonResponse = await fetch('/directorio_empleados_barceloneta.json');
-                if (jsonResponse.ok) {
-                    let data = await jsonResponse.json();
+                const response = await fetch('/api/get-data');
+                if (response.ok) {
+                    let data = await response.json();
                     if (Array.isArray(data) && data.length > 0) {
                         employees = data.map(emp => ({
                             firstName: emp.Nombre || emp.firstName || '',
@@ -756,26 +756,34 @@
                     }
                 }
             } catch (error) {
-                console.warn("No se pudo cargar el JSON estático, intentando API...");
+                console.warn("No se pudo cargar la API, intentando JSON estático...");
             }
 
-            // 2. Si no se cargó data del JSON, intentar la API (Vercel Blob)
+            // 2. Si no se cargó data de la API, intentar el JSON estático
             if (!dataLoaded) {
                 try {
-                    const response = await fetch('/api/get-data');
-                    if (response.ok) {
-                        let data = await response.json();
+                    const jsonResponse = await fetch('/directorio_empleados_barceloneta.json');
+                    if (jsonResponse.ok) {
+                        let data = await jsonResponse.json();
                         if (Array.isArray(data) && data.length > 0) {
-                            employees = data;
+                            employees = data.map(emp => ({
+                                firstName: emp.Nombre || emp.firstName || '',
+                                lastName: emp.Apellido || emp.lastName || '',
+                                email: emp.Email || emp.email || '',
+                                phone: emp['Teléfono'] || emp.phone || '',
+                                department: emp.Departamento || emp.department || '',
+                                position: emp.Puesto || emp.position || '',
+                                extension: emp['Extensión'] || emp.extension || ''
+                            }));
                             dataLoaded = true;
                         }
                     }
                 } catch (error) {
-                    console.warn("API no disponible, intentando cargar CSV local...");
+                    console.warn("No se pudo cargar el JSON estático, intentando CSV local...");
                 }
             }
 
-            // 3. Si no se cargó data de la API, leer el CSV local
+            // 3. Si no se cargó data del JSON, leer el CSV local
             if (!dataLoaded) {
                 try {
                     const csvResponse = await fetch('/directorio_empleados_barceloneta.csv');
