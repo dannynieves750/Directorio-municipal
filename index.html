@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      HEAD
     <title>Directorio de Empleados - Municipio de Barceloneta</title>
     <link rel="icon" type="image/png" href="logo-barceloneta.png">
+
+    <title>Directorio de Empleados</title>
+     <title>Municipio de Barceloneta</title>
+        bd44e3d (Actualiza index.html)
     <style>
         * {
             margin: 0;
@@ -444,7 +449,11 @@
     <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
         
         <!-- Logo PNG -->
+ HEAD
     <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
+
+        <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120x;">
+ bd44e3d (Actualiza index.html)
 
         <div>
             <h1>Directorio de Empleados</h1>
@@ -736,75 +745,44 @@
         });
 
         async function loadInitialData() {
-            let dataLoaded = false;
-            // 1. Intentar obtener datos desde el JSON estático
-            try {
-                const jsonResponse = await fetch('/directorio_empleados_barceloneta.json');
-                if (jsonResponse.ok) {
-                    let data = await jsonResponse.json();
-                    if (Array.isArray(data) && data.length > 0) {
-                        employees = data.map(emp => ({
-                            firstName: emp.Nombre || emp.firstName || '',
-                            lastName: emp.Apellido || emp.lastName || '',
-                            email: emp.Email || emp.email || '',
-                            phone: emp['Teléfono'] || emp.phone || '',
-                            department: emp.Departamento || emp.department || '',
-                            position: emp.Puesto || emp.position || '',
-                            extension: emp['Extensión'] || emp.extension || ''
-                        }));
-                        dataLoaded = true;
-                    }
-                }
-            } catch (error) {
-                console.warn("No se pudo cargar el JSON estático, intentando API...");
-            }
-
-            // 2. Si no se cargó data del JSON, intentar la API (Vercel Blob)
-            if (!dataLoaded) {
-                try {
-                    const response = await fetch('/api/get-data');
-                    if (response.ok) {
-                        let data = await response.json();
-                        if (Array.isArray(data) && data.length > 0) {
-                            employees = data;
-                            dataLoaded = true;
-                        }
-                    }
-                } catch (error) {
-                    console.warn("API no disponible, intentando cargar CSV local...");
-                }
-            }
-
-            // 3. Si no se cargó data de la API, leer el CSV local
-            if (!dataLoaded) {
-                try {
-                    const csvResponse = await fetch('/directorio_empleados_barceloneta.csv');
-                    if (csvResponse.ok) {
-                        const csvText = await csvResponse.text();
-                        parseCSVData(csvText, true); // llena 'employees'
-                        if (employees.length > 0) {
-                            dataLoaded = true;
-                        }
-                    } else {
-                        console.warn("No se encontró el archivo CSV local. La aplicación comenzará con cero empleados.");
-                        employees = [];
-                    }
-                } catch (error) {
-                    console.error("Error cargando el CSV local:", error);
-                    employees = [];
-                }
-            }
-
-            // 4. Si tampoco hay datos, intentar cargar desde localStorage
-            if (!dataLoaded) {
-                const savedData = localStorage.getItem('companyEmployees');
-                if (savedData) {
-                    employees = JSON.parse(savedData);
-                } else {
-                    employees = [];
-                }
-            }
+    try {
+        // 1. Intentar obtener datos desde la API (Vercel KV)
+        const response = await fetch('/api/get-data');
+        if (!response.ok) {
+            throw new Error(`Error de la API: ${response.statusText}`);
         }
+        let data = await response.json();
+
+        // 2. Si Blob está vacío, leer el CSV local y subirlo
+        if (data.length === 0) {
+            console.log("Vercel Blob está vacío. Intentando poblar desde el archivo CSV local...");
+            const csvResponse = await fetch('directorio_empleados_barceloneta.csv');
+            if (csvResponse.ok) {
+                const csvText = await csvResponse.text();
+                // parseCSVData llenará la variable global 'employees'
+                parseCSVData(csvText, true); 
+                // Ahora, guarda estos datos iniciales en el servidor
+                await saveDataToServer(true); // true para indicar que es la carga inicial
+                console.log("Datos del CSV subidos a Vercel Blob.");
+            } else {
+                console.warn("No se encontró el archivo CSV local. La aplicación comenzará con cero empleados.");
+                employees = [];
+            }
+        } else {
+            // Si la API devolvió datos, esos son nuestros empleados
+            employees = data;
+        }
+    } catch (error) {
+        console.error("Error cargando los datos iniciales:", error);
+        // Como fallback final, intentar cargar desde localStorage
+        const savedData = localStorage.getItem('companyEmployees');
+        if (savedData) {
+            employees = JSON.parse(savedData);
+        } else {
+            employees = [];
+        }
+    }
+}
 
         function saveEmployees() {
             // Esta función ahora solo guarda en el respaldo local (localStorage)
@@ -1248,5 +1226,11 @@ function reportCorrections() {
             }
         }
     </script>
+</body>
+ HEAD
+</html>
+=======
+</html>
+         bd44e3d (Actualiza index.html)
 </body>
 </html>
