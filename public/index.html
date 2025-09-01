@@ -441,18 +441,18 @@
         </div>
 
        <div class="header">
-    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
-        
-        <!-- Logo PNG -->
-    <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
+        <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
+            
+            <!-- Logo PNG -->
+            <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
 
-        <div>
-            <h1>Directorio de Empleados</h1>
-            <h2>Municipio de Barceloneta</h2>
-            <p>Sistema de gestión de contactos municipales</p>
+            <div>
+                <h1>Directorio de Empleados</h1>
+                <h2>Municipio de Barceloneta</h2>
+                <p>Sistema de gestión de contactos municipales</p>
+            </div>
         </div>
     </div>
-</div>
 
 
         <div class="stats">
@@ -736,75 +736,36 @@
         });
 
         async function loadInitialData() {
-            let dataLoaded = false;
-            // 1. Intentar obtener datos desde la API (Vercel Blob)
             try {
+                // 1. Intentar obtener datos desde la API (Vercel KV)
                 const response = await fetch('/api/get-data');
-                if (response.ok) {
-                    let data = await response.json();
-                    if (Array.isArray(data) && data.length > 0) {
-                        employees = data.map(emp => ({
-                            firstName: emp.Nombre || emp.firstName || '',
-                            lastName: emp.Apellido || emp.lastName || '',
-                            email: emp.Email || emp.email || '',
-                            phone: emp['Teléfono'] || emp.phone || '',
-                            department: emp.Departamento || emp.department || '',
-                            position: emp.Puesto || emp.position || '',
-                            extension: emp['Extensión'] || emp.extension || ''
-                        }));
-                        dataLoaded = true;
-                    }
+                if (!response.ok) {
+                    throw new Error(`Error de la API: ${response.statusText}`);
                 }
-            } catch (error) {
-                console.warn("No se pudo cargar la API, intentando JSON estático...");
-            }
+                let data = await response.json();
 
-            // 2. Si no se cargó data de la API, intentar el JSON estático
-            if (!dataLoaded) {
-                try {
-                    const jsonResponse = await fetch('/directorio_empleados_barceloneta.json');
-                    if (jsonResponse.ok) {
-                        let data = await jsonResponse.json();
-                        if (Array.isArray(data) && data.length > 0) {
-                            employees = data.map(emp => ({
-                                firstName: emp.Nombre || emp.firstName || '',
-                                lastName: emp.Apellido || emp.lastName || '',
-                                email: emp.Email || emp.email || '',
-                                phone: emp['Teléfono'] || emp.phone || '',
-                                department: emp.Departamento || emp.department || '',
-                                position: emp.Puesto || emp.position || '',
-                                extension: emp['Extensión'] || emp.extension || ''
-                            }));
-                            dataLoaded = true;
-                        }
-                    }
-                } catch (error) {
-                    console.warn("No se pudo cargar el JSON estático, intentando CSV local...");
-                }
-            }
-
-            // 3. Si no se cargó data del JSON, leer el CSV local
-            if (!dataLoaded) {
-                try {
-                    const csvResponse = await fetch('/directorio_empleados_barceloneta.csv');
+                // 2. Si Blob está vacío, leer el CSV local y subirlo
+                if (data.length === 0) {
+                    console.log("Vercel Blob está vacío. Intentando poblar desde el archivo CSV local...");
+                    const csvResponse = await fetch('directorio_empleados_barceloneta.csv');
                     if (csvResponse.ok) {
                         const csvText = await csvResponse.text();
-                        parseCSVData(csvText, true); // llena 'employees'
-                        if (employees.length > 0) {
-                            dataLoaded = true;
-                        }
+                        // parseCSVData llenará la variable global 'employees'
+                        parseCSVData(csvText, true); 
+                        // Ahora, guarda estos datos iniciales en el servidor
+                        await saveDataToServer(true); // true para indicar que es la carga inicial
+                        console.log("Datos del CSV subidos a Vercel Blob.");
                     } else {
                         console.warn("No se encontró el archivo CSV local. La aplicación comenzará con cero empleados.");
                         employees = [];
                     }
-                } catch (error) {
-                    console.error("Error cargando el CSV local:", error);
-                    employees = [];
+                } else {
+                    // Si la API devolvió datos, esos son nuestros empleados
+                    employees = data;
                 }
-            }
-
-            // 4. Si tampoco hay datos, intentar cargar desde localStorage
-            if (!dataLoaded) {
+            } catch (error) {
+                console.error("Error cargando los datos iniciales:", error);
+                // Como fallback final, intentar cargar desde localStorage
                 const savedData = localStorage.getItem('companyEmployees');
                 if (savedData) {
                     employees = JSON.parse(savedData);
@@ -1031,6 +992,7 @@
                     if (!line) continue;
 
                     const values = parseCSVLine(line, separator);
+                    
                     if (values.length < headers.length) {
                         errorCount++;
                         continue;
@@ -1038,8 +1000,10 @@
 
                     try {
                         const employee = {};
+                        
                         headers.forEach((header, index) => {
                             const value = values[index] ? values[index].trim() : '';
+                            
                             if (header.includes('nombre') && !header.includes('apellido')) {
                                 employee.firstName = value;
                             } else if (header.includes('apellido') || header.includes('apellidos')) {
@@ -1057,10 +1021,14 @@
                             }
                         });
 
-                        // Permitir empleados aunque falte el teléfono, solo requerir nombre y apellido
-                        if (employee.firstName && employee.lastName) {
-                            importedEmployees.push(employee);
-                            successCount++;
+                        if (employee.firstName && employee.lastName && employee.phone) {
+                            const exists = employee.email && employees.some(emp => emp.email && emp.email.toLowerCase() === employee.email.toLowerCase());
+                            if (!exists) {
+                                importedEmployees.push(employee);
+                                successCount++;
+                            } else {
+                                errorCount++;
+                            }
                         } else {
                             errorCount++;
                         }
