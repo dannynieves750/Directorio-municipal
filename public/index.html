@@ -1049,8 +1049,8 @@
                             }
                         });
 
-                        // Permitir empleados sin email y no descartar duplicados en la carga inicial
-                        if (employee.firstName && employee.lastName && employee.phone) {
+                        // Permitir empleados aunque falte el teléfono, solo requerir nombre y apellido
+                        if (employee.firstName && employee.lastName) {
                             importedEmployees.push(employee);
                             successCount++;
                         } else {
