@@ -3,13 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      HEAD
     <title>Directorio de Empleados - Municipio de Barceloneta</title>
     <link rel="icon" type="image/png" href="logo-barceloneta.png">
-
-    <title>Directorio de Empleados</title>
-     <title>Municipio de Barceloneta</title>
-        bd44e3d (Actualiza index.html)
     <style>
         * {
             margin: 0;
@@ -446,22 +441,18 @@
         </div>
 
        <div class="header">
-    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
-        
-        <!-- Logo PNG -->
- HEAD
-    <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
+        <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
+            
+            <!-- Logo PNG -->
+            <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
 
-        <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120x;">
- bd44e3d (Actualiza index.html)
-
-        <div>
-            <h1>Directorio de Empleados</h1>
-            <h2>Municipio de Barceloneta</h2>
-            <p>Sistema de gestión de contactos municipales</p>
+            <div>
+                <h1>Directorio de Empleados</h1>
+                <h2>Municipio de Barceloneta</h2>
+                <p>Sistema de gestión de contactos municipales</p>
+            </div>
         </div>
     </div>
-</div>
 
 
         <div class="stats">
@@ -745,44 +736,44 @@
         });
 
         async function loadInitialData() {
-    try {
-        // 1. Intentar obtener datos desde la API (Vercel KV)
-        const response = await fetch('/api/get-data');
-        if (!response.ok) {
-            throw new Error(`Error de la API: ${response.statusText}`);
-        }
-        let data = await response.json();
+            try {
+                // 1. Intentar obtener datos desde la API (Vercel KV)
+                const response = await fetch('/api/get-data');
+                if (!response.ok) {
+                    throw new Error(`Error de la API: ${response.statusText}`);
+                }
+                let data = await response.json();
 
-        // 2. Si Blob está vacío, leer el CSV local y subirlo
-        if (data.length === 0) {
-            console.log("Vercel Blob está vacío. Intentando poblar desde el archivo CSV local...");
-            const csvResponse = await fetch('directorio_empleados_barceloneta.csv');
-            if (csvResponse.ok) {
-                const csvText = await csvResponse.text();
-                // parseCSVData llenará la variable global 'employees'
-                parseCSVData(csvText, true); 
-                // Ahora, guarda estos datos iniciales en el servidor
-                await saveDataToServer(true); // true para indicar que es la carga inicial
-                console.log("Datos del CSV subidos a Vercel Blob.");
-            } else {
-                console.warn("No se encontró el archivo CSV local. La aplicación comenzará con cero empleados.");
-                employees = [];
+                // 2. Si Blob está vacío, leer el CSV local y subirlo
+                if (data.length === 0) {
+                    console.log("Vercel Blob está vacío. Intentando poblar desde el archivo CSV local...");
+                    const csvResponse = await fetch('directorio_empleados_barceloneta.csv');
+                    if (csvResponse.ok) {
+                        const csvText = await csvResponse.text();
+                        // parseCSVData llenará la variable global 'employees'
+                        parseCSVData(csvText, true); 
+                        // Ahora, guarda estos datos iniciales en el servidor
+                        await saveDataToServer(true); // true para indicar que es la carga inicial
+                        console.log("Datos del CSV subidos a Vercel Blob.");
+                    } else {
+                        console.warn("No se encontró el archivo CSV local. La aplicación comenzará con cero empleados.");
+                        employees = [];
+                    }
+                } else {
+                    // Si la API devolvió datos, esos son nuestros empleados
+                    employees = data;
+                }
+            } catch (error) {
+                console.error("Error cargando los datos iniciales:", error);
+                // Como fallback final, intentar cargar desde localStorage
+                const savedData = localStorage.getItem('companyEmployees');
+                if (savedData) {
+                    employees = JSON.parse(savedData);
+                } else {
+                    employees = [];
+                }
             }
-        } else {
-            // Si la API devolvió datos, esos son nuestros empleados
-            employees = data;
         }
-    } catch (error) {
-        console.error("Error cargando los datos iniciales:", error);
-        // Como fallback final, intentar cargar desde localStorage
-        const savedData = localStorage.getItem('companyEmployees');
-        if (savedData) {
-            employees = JSON.parse(savedData);
-        } else {
-            employees = [];
-        }
-    }
-}
 
         function saveEmployees() {
             // Esta función ahora solo guarda en el respaldo local (localStorage)
@@ -1226,11 +1217,5 @@ function reportCorrections() {
             }
         }
     </script>
-</body>
- HEAD
-</html>
-=======
-</html>
-         bd44e3d (Actualiza index.html)
 </body>
 </html>
