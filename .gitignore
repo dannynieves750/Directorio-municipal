@@ -1,2 +1,9 @@
+# Dependencies
+/node_modules
+
+# macOS
+.DS_Store
+
+# Vercel
 .vercel
 .env*.local
