@@ -5,7 +5,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const employees = req.body;
+      const employees = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       await put('directorio_empleados_barceloneta.json', JSON.stringify(employees), {
         access: 'public',
         contentType: 'application/json',
