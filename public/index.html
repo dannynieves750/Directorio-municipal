@@ -441,15 +441,19 @@
         </div>
 
        <div class="header">
-            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
-                <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
-                <div>
-                    <h1>Directorio de Empleados</h1>
-                    <h2>Municipio de Barceloneta</h2>
-                    <p>Sistema de gestión de contactos municipales</p>
-                </div>
-            </div>
+    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
+        
+        <!-- Logo PNG -->
+    <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
+
+        <div>
+            <h1>Directorio de Empleados</h1>
+            <h2>Municipio de Barceloneta</h2>
+            <p>Sistema de gestión de contactos municipales</p>
         </div>
+    </div>
+</div>
+
 
         <div class="stats">
             <p>Total de empleados: <span id="totalEmployees">0</span> | Departamentos: <span id="totalDepartments">0</span></p>
@@ -562,18 +566,30 @@
                 role: 'user',
                 name: 'Secretario'
             }
+            // AGREGAR NUEVOS USUARIOS AQUÍ:
+            // 'nombre_usuario': {
+            //     password: 'contraseña123',
+            //     role: 'admin',  // 'admin' para acceso total, 'user' para solo lectura
+            //     name: 'Nombre Completo'
+            // }
         };
         // ============================================
 
+        // Verificar si hay una sesión activa al cargar
         window.onload = async function() {
+            // Precargar los datos desde la API o el CSV antes de hacer nada más.
+            await loadInitialData();
+            
             const savedSession = sessionStorage.getItem('userSession');
             if (savedSession) {
                 const session = JSON.parse(savedSession);
+                // Solo restaurar la sesión si es un admin
                 if (isValidSession(session) && session.role === 'admin') {
                     loginUser(session.username, session.role, session.name);
                     return;
                 }
             }
+            // Para todos los demás casos, cargar la vista de invitado por defecto.
             setupGuestUserView();
         };
 
@@ -582,6 +598,7 @@
         }
 
         function isValidSession(session) {
+            // Verificar si la sesión es válida (menos de 8 horas)
             const now = new Date().getTime();
             const sessionTime = new Date(session.timestamp).getTime();
             const eightHours = 8 * 60 * 60 * 1000;
@@ -604,9 +621,11 @@
             }
 
             if (users[username] && users[username].password === password) {
+                // Login exitoso
                 const user = users[username];
                 loginUser(username, user.role, user.name);
                 
+                // Guardar sesión
                 const session = {
                     username: username,
                     role: user.role,
@@ -614,6 +633,7 @@
                     timestamp: new Date().toISOString()
                 };
                 sessionStorage.setItem('userSession', JSON.stringify(session));
+                
                 errorDiv.style.display = 'none';
             } else {
                 showLoginError('Usuario o contraseña incorrectos');
@@ -626,13 +646,14 @@
             errorDiv.style.display = 'block';
         }
 
-        async function loginUser(username, role, name) {
+        function loginUser(username, role, name) {
             currentUser = username;
             userRole = role;
             
             document.getElementById('loginContainer').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
             
+            // Actualizar información del usuario
             document.getElementById('currentUser').textContent = name;
             const roleSpan = document.getElementById('userRole');
             const logoutBtn = document.querySelector('.logout-btn');
@@ -640,7 +661,7 @@
             if (role === 'admin') {
                 roleSpan.textContent = 'Administrador';
                 logoutBtn.innerHTML = '🚪 Salir';
-            } else {
+            } else { // user or guest
                 roleSpan.textContent = 'Solo Lectura';
                 logoutBtn.innerHTML = '🔑 Acceder';
             }
@@ -648,9 +669,13 @@
             roleSpan.style.background = role === 'admin' ? '#a30000' : '#c8d8e4';
             roleSpan.style.color = role === 'admin' ? 'white' : '#2b6777';
             
+            // Configurar permisos
             setupPermissions(role);
             
-            await loadInitialData();
+            // Los empleados ya están cargados, solo necesitamos mostrarlos.
+            displayEmployees();
+            updateFilters();
+            updateStats();
         }
 
         function setupPermissions(role) {
@@ -678,44 +703,107 @@
         }
 
         function logout() {
+            // Si no es un admin (es decir, es un invitado o usuario), ir directamente a la pantalla de login sin confirmación.
             if (userRole !== 'admin') {
                 showLoginScreen();
                 return;
             }
             
+            // Para el admin, pedir confirmación.
             if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
                 sessionStorage.removeItem('userSession');
                 currentUser = null;
                 userRole = null;
                 showLoginScreen();
+                
+                // Limpiar campos de login
                 document.getElementById('loginUser').value = '';
                 document.getElementById('loginPassword').value = '';
             }
         }
 
+        // Enter key para login
         document.getElementById('loginPassword').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') attemptLogin();
+            if (e.key === 'Enter') {
+                attemptLogin();
+            }
         });
 
         document.getElementById('loginUser').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') document.getElementById('loginPassword').focus();
+            if (e.key === 'Enter') {
+                document.getElementById('loginPassword').focus();
+            }
         });
 
         async function loadInitialData() {
             let dataLoaded = false;
+            // 1. Intentar obtener datos desde la API (Vercel Blob)
             try {
                 const response = await fetch('/api/get-data');
                 if (response.ok) {
                     let data = await response.json();
-                    if (Array.isArray(data)) {
-                        employees = data;
+                    if (Array.isArray(data) && data.length > 0) {
+                        employees = data.map(emp => ({
+                            firstName: emp.Nombre || emp.firstName || '',
+                            lastName: emp.Apellido || emp.lastName || '',
+                            email: emp.Email || emp.email || '',
+                            phone: emp['Teléfono'] || emp.phone || '',
+                            department: emp.Departamento || emp.department || '',
+                            position: emp.Puesto || emp.position || '',
+                            extension: emp['Extensión'] || emp.extension || ''
+                        }));
                         dataLoaded = true;
                     }
                 }
             } catch (error) {
-                console.warn("No se pudo cargar la API, intentando respaldo...", error);
+                console.warn("No se pudo cargar la API, intentando JSON estático...");
             }
 
+            // 2. Si no se cargó data de la API, intentar el JSON estático
+            if (!dataLoaded) {
+                try {
+                    const jsonResponse = await fetch('/directorio_empleados_barceloneta.json');
+                    if (jsonResponse.ok) {
+                        let data = await jsonResponse.json();
+                        if (Array.isArray(data) && data.length > 0) {
+                            employees = data.map(emp => ({
+                                firstName: emp.Nombre || emp.firstName || '',
+                                lastName: emp.Apellido || emp.lastName || '',
+                                email: emp.Email || emp.email || '',
+                                phone: emp['Teléfono'] || emp.phone || '',
+                                department: emp.Departamento || emp.department || '',
+                                position: emp.Puesto || emp.position || '',
+                                extension: emp['Extensión'] || emp.extension || ''
+                            }));
+                            dataLoaded = true;
+                        }
+                    }
+                } catch (error) {
+                    console.warn("No se pudo cargar el JSON estático, intentando CSV local...");
+                }
+            }
+
+            // 3. Si no se cargó data del JSON, leer el CSV local
+            if (!dataLoaded) {
+                try {
+                    const csvResponse = await fetch('/directorio_empleados_barceloneta.csv');
+                    if (csvResponse.ok) {
+                        const csvText = await csvResponse.text();
+                        parseCSVData(csvText, true); // llena 'employees'
+                        if (employees.length > 0) {
+                            dataLoaded = true;
+                        }
+                    } else {
+                        console.warn("No se encontró el archivo CSV local. La aplicación comenzará con cero empleados.");
+                        employees = [];
+                    }
+                } catch (error) {
+                    console.error("Error cargando el CSV local:", error);
+                    employees = [];
+                }
+            }
+
+            // 4. Si tampoco hay datos, intentar cargar desde localStorage
             if (!dataLoaded) {
                 const savedData = localStorage.getItem('companyEmployees');
                 if (savedData) {
@@ -724,13 +812,10 @@
                     employees = [];
                 }
             }
-            
-            displayEmployees();
-            updateFilters();
-            updateStats();
         }
 
         function saveEmployees() {
+            // Esta función ahora solo guarda en el respaldo local (localStorage)
             localStorage.setItem('companyEmployees', JSON.stringify(employees));
             updateStats();
         }
@@ -740,7 +825,12 @@
             const employeesToShow = filteredEmployees || employees;
 
             if (employeesToShow.length === 0) {
-                grid.innerHTML = `<div style="text-align: center; grid-column: 1/-1; padding: 50px; color: #999;"><h3>No hay empleados que coincidan</h3><p>Intenta ajustar los filtros de búsqueda</p></div>`;
+                grid.innerHTML = `
+                    <div style="text-align: center; grid-column: 1/-1; padding: 50px; color: #999;">
+                        <h3>No hay empleados que coincidan</h3>
+                        <p>Intenta ajustar los filtros de búsqueda</p>
+                    </div>
+                `;
                 return;
             }
 
@@ -749,17 +839,33 @@
                 return `
                     <div class="employee-card">
                         <div class="employee-header">
-                            <div class="employee-avatar">${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}</div>
+                            <div class="employee-avatar">
+                                ${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}
+                            </div>
                             <div class="employee-info">
                                 <h3>${employee.firstName} ${employee.lastName}</h3>
                                 <p>${employee.position}</p>
                             </div>
                         </div>
                         <div class="employee-details">
-                            <div class="detail-row"><span class="detail-label">Email:</span><span class="detail-value">${employee.email ? `<a href="mailto:${employee.email}">${employee.email}</a>` : 'N/A'}</span></div>
-                            <div class="detail-row"><span class="detail-label">Teléfono:</span><span class="detail-value">${employee.phone}</span></div>
-                            <div class="detail-row"><span class="detail-label">Depto:</span><span class="detail-value">${employee.department}</span></div>
-                            ${employee.extension ? `<div class="detail-row"><span class="detail-label">Ext:</span><span class="detail-value">${employee.extension}</span></div>` : ''}
+                            <div class="detail-row">
+                                <span class="detail-label">Email:</span>
+                                <span class="detail-value">${employee.email ? `<a href="mailto:${employee.email}">${employee.email}</a>` : 'N/A'}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Teléfono:</span>
+                                <span class="detail-value">${employee.phone}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Depto:</span>
+                                <span class="detail-value">${employee.department}</span>
+                            </div>
+                            ${employee.extension ? `
+                                <div class="detail-row">
+                                    <span class="detail-label">Ext:</span>
+                                    <span class="detail-value">${employee.extension}</span>
+                                </div>
+                            ` : ''}
                         </div>
                         <div class="employee-actions" ${userRole !== 'admin' ? 'style="display:none;"' : ''}>
                             <button class="btn btn-info btn-small" onclick="editEmployee(${actualIndex})">✏️ Editar</button>
@@ -847,19 +953,19 @@
             const departmentFilter = document.getElementById('departmentFilter');
             const positionFilter = document.getElementById('positionFilter');
             
-            const departments = [...new Set(employees.map(emp => emp.department))].filter(Boolean);
-            const positions = [...new Set(employees.map(emp => emp.position))].filter(Boolean);
+            const departments = [...new Set(employees.map(emp => emp.department))];
+            const positions = [...new Set(employees.map(emp => emp.position))];
             
             departmentFilter.innerHTML = '<option value="">Todos los departamentos</option>' +
-                departments.sort().map(dept => `<option value="${dept}">${dept}</option>`).join('');
+                departments.map(dept => `<option value="${dept}">${dept}</option>`).join('');
             
             positionFilter.innerHTML = '<option value="">Todos los puestos</option>' +
-                positions.sort().map(pos => `<option value="${pos}">${pos}</option>`).join('');
+                positions.map(pos => `<option value="${pos}">${pos}</option>`).join('');
         }
 
         function updateStats() {
             document.getElementById('totalEmployees').textContent = employees.length;
-            const departments = new Set(employees.map(emp => emp.department).filter(Boolean));
+            const departments = new Set(employees.map(emp => emp.department));
             document.getElementById('totalDepartments').textContent = departments.size;
         }
 
@@ -871,7 +977,11 @@
 
             const filtered = employees.filter(employee => {
                 const matchesSearch = !searchTerm || 
-                    Object.values(employee).some(val => removeAccents(String(val).toLowerCase()).includes(searchTerm));
+                    removeAccents(employee.firstName.toLowerCase()).includes(searchTerm) ||
+                    removeAccents(employee.lastName.toLowerCase()).includes(searchTerm) ||
+                    removeAccents(employee.email.toLowerCase()).includes(searchTerm) ||
+                    removeAccents(employee.department.toLowerCase()).includes(searchTerm) ||
+                    employee.phone.includes(searchTerm);
                 
                 const matchesDepartment = !departmentFilter || employee.department === departmentFilter;
                 const matchesPosition = !positionFilter || employee.position === positionFilter;
@@ -882,18 +992,21 @@
             displayEmployees(filtered);
         }
 
+        // Event listeners para filtros
         document.getElementById('searchInput').addEventListener('input', filterEmployees);
         document.getElementById('departmentFilter').addEventListener('change', filterEmployees);
         document.getElementById('positionFilter').addEventListener('change', filterEmployees);
 
         function importCSV(event) {
             if (!checkPermission('import')) return;
+            
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                parseCSVData(e.target.result);
+                const csv = e.target.result;
+                parseCSVData(csv);
             };
             reader.readAsText(file);
         }
@@ -902,7 +1015,7 @@
             try {
                 const lines = csv.split('\n');
                 if (lines.length < 2) {
-                    if (!isInitialLoad) alert('El archivo CSV debe tener al menos una fila de encabezados y una de datos.');
+                    if (!isInitialLoad) alert('El archivo CSV debe tener al menos una fila de encabezados y una fila de datos.');
                     return;
                 }
 
@@ -927,15 +1040,24 @@
                         const employee = {};
                         headers.forEach((header, index) => {
                             const value = values[index] ? values[index].trim() : '';
-                            if (header.includes('nombre') && !header.includes('apellido')) employee.firstName = value;
-                            else if (header.includes('apellido')) employee.lastName = value;
-                            else if (header.includes('email')) employee.email = value;
-                            else if (header.includes('teléfono')) employee.phone = value;
-                            else if (header.includes('departamento')) employee.department = value;
-                            else if (header.includes('puesto')) employee.position = value;
-                            else if (header.includes('extensión')) employee.extension = value;
+                            if (header.includes('nombre') && !header.includes('apellido')) {
+                                employee.firstName = value;
+                            } else if (header.includes('apellido') || header.includes('apellidos')) {
+                                employee.lastName = value;
+                            } else if (header.includes('email') || header.includes('correo')) {
+                                employee.email = value;
+                            } else if (header.includes('teléfono') || header.includes('telefono') || header.includes('phone')) {
+                                employee.phone = value;
+                            } else if (header.includes('departamento') || header.includes('department') || header.includes('depto')) {
+                                employee.department = value;
+                            } else if (header.includes('puesto') || header.includes('cargo') || header.includes('position') || header.includes('título')) {
+                                employee.position = value;
+                            } else if (header.includes('extensión') || header.includes('extension') || header.includes('ext')) {
+                                employee.extension = value;
+                            }
                         });
 
+                        // Permitir empleados aunque falte el teléfono, solo requerir nombre y apellido
                         if (employee.firstName && employee.lastName) {
                             importedEmployees.push(employee);
                             successCount++;
@@ -949,23 +1071,28 @@
 
                 if (isInitialLoad) {
                     employees = importedEmployees;
+                    displayEmployees();
+                    updateFilters();
+                    updateStats();
+                    saveEmployees();
                 } else {
                     if (importedEmployees.length > 0) {
-                        if (confirm(`Se encontraron ${successCount} empleados válidos. ¿Desea importarlos?`)) {
+                        if (confirm(`Se encontraron ${successCount} empleados válidos para importar${errorCount > 0 ? ` y ${errorCount} registros con errores` : ''}.\n\n¿Desea proceder con la importación?`)) {
                             employees.push(...importedEmployees);
                             saveEmployees();
                             displayEmployees();
                             updateFilters();
-                            alert(`✅ ${successCount} empleados importados.`);
+                            alert(`✅ Importación completada:\n• ${successCount} empleados importados correctamente${errorCount > 0 ? `\n• ${errorCount} registros omitidos por errores` : ''}`);
                         }
                     } else {
-                        alert('❌ No se encontraron empleados válidos para importar.');
+                        alert('❌ No se encontraron empleados válidos para importar.\n\nVerifique que el archivo CSV tenga las columnas: Nombre, Apellido, Email, Teléfono, Departamento, Puesto');
                     }
                 }
             } catch (error) {
-                if (!isInitialLoad) alert('❌ Error al procesar el archivo CSV.');
+                if (!isInitialLoad) alert('❌ Error al procesar el archivo CSV. Verifique que el formato sea correcto.');
                 console.error('Error parsing CSV:', error);
             }
+            
             document.getElementById('csvFileInput').value = '';
         }
 
@@ -973,8 +1100,10 @@
             const values = [];
             let current = '';
             let inQuotes = false;
+            
             for (let i = 0; i < line.length; i++) {
                 const char = line[i];
+                
                 if (char === '"') {
                     inQuotes = !inQuotes;
                 } else if (char === separator && !inQuotes) {
@@ -984,6 +1113,7 @@
                     current += char;
                 }
             }
+            
             values.push(current.trim().replace(/^"|"$/g, ''));
             return values;
         }
@@ -993,11 +1123,13 @@
                 alert('No hay datos para exportar');
                 return;
             }
+
             const csvContent = "data:text/csv;charset=utf-8," 
                 + "Nombre,Apellido,Email,Teléfono,Departamento,Puesto,Extensión\n"
                 + employees.map(emp => 
                     `"${emp.firstName}","${emp.lastName}","${emp.email}","${emp.phone}","${emp.department}","${emp.position}","${emp.extension || ''}"`
                 ).join('\n');
+
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
@@ -1010,14 +1142,17 @@
         async function saveDataToServer(isInitialLoad = false) {
             if (!isInitialLoad && !checkPermission('save')) return;
 
-            if (!isInitialLoad && !confirm('¿Estás seguro de que quieres sobrescribir los datos en el servidor?')) {
+            if (!isInitialLoad && !confirm('¿Estás seguro de que quieres sobrescribir los datos en el servidor con los datos actuales? Esta acción es irreversible.')) {
                 return;
             }
 
             try {
                 const response = await fetch('/api/save-data', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    // Enviamos el array de empleados directamente
                     body: JSON.stringify(employees) 
                 });
 
@@ -1026,8 +1161,8 @@
                 if (result.success) {
                     if (!isInitialLoad) {
                         alert('✅ ¡Éxito! Los datos han sido guardados en el servidor.');
-                        await loadInitialData();
                     }
+                    // Guardamos también en el respaldo local para consistencia
                     saveEmployees();
                 } else {
                     if (!isInitialLoad) {
@@ -1037,46 +1172,76 @@
             } catch (error) {
                 console.error('Error al contactar el servidor:', error);
                 if (!isInitialLoad) {
-                    alert('❌ Error de conexión. No se pudo contactar al servidor.');
+                    alert('❌ Error de conexión. No se pudo contactar al servidor para guardar los datos.');
                 }
             }
         }
 
         function loadSampleData() {
             if (!checkPermission('import')) return;
+            
             if (confirm('¿Cargar datos de ejemplo? Esto agregará empleados de muestra.')) {
                 const sampleData = [
-                    { firstName: "María", lastName: "González", email: "maria.gonzalez@barceloneta.gov.pr", phone: "787-555-0101", department: "Recursos Humanos", position: "Gerente de RRHH", extension: "101" },
-                    { firstName: "Carlos", lastName: "Rodríguez", email: "carlos.rodriguez@barceloneta.gov.pr", phone: "787-555-0102", department: "Sistemas", position: "Desarrollador Senior", extension: "201" },
-                    { firstName: "Ana", lastName: "López", email: "ana.lopez@barceloneta.gov.pr", phone: "787-555-0103", department: "Administración", position: "Secretaria Ejecutiva", extension: "301" }
+                    {
+                        firstName: "María", lastName: "González",
+                        email: "maria.gonzalez@barceloneta.gov.pr", phone: "787-555-0101",
+                        department: "Recursos Humanos", position: "Gerente de RRHH",
+                        extension: "101"
+                    },
+                    {
+                        firstName: "Carlos", lastName: "Rodríguez",
+                        email: "carlos.rodriguez@barceloneta.gov.pr", phone: "787-555-0102",
+                        department: "Sistemas", position: "Desarrollador Senior",
+                        extension: "201"
+                    },
+                    {
+                        firstName: "Ana", lastName: "López",
+                        email: "ana.lopez@barceloneta.gov.pr", phone: "787-555-0103",
+                        department: "Administración", position: "Secretaria Ejecutiva",
+                        extension: "301"
+                    },
+                    {
+                        firstName: "Luis", lastName: "Martínez",
+                        email: "luis.martinez@barceloneta.gov.pr", phone: "787-555-0104",
+                        department: "Finanzas", position: "Contador Municipal",
+                        extension: "401"
+                    },
+                    {
+                        firstName: "Patricia", lastName: "Hernández",
+                        email: "patricia.hernandez@barceloneta.gov.pr", phone: "787-555-0105",
+                        department: "Obras Públicas", position: "Ingeniera",
+                        extension: "501"
+                    }
                 ];
+
                 employees.push(...sampleData);
                 saveEmployees();
                 displayEmployees();
                 updateFilters();
-                alert('Datos de ejemplo cargados.');
+                alert('Datos de ejemplo cargados correctamente');
             }
         }
-
         function clearAllData() {
-            if (!checkPermission('clear')) return;
-            if (confirm('⚠️ ¿Eliminar TODOS los empleados? Esta acción no se puede deshacer.')) {
-                localStorage.removeItem('companyEmployees');
-                employees = [];
-                displayEmployees();
-                updateFilters();
-                updateStats();
-                alert('Todos los datos han sido eliminados.');
-            }
-        }
+    if (!checkPermission('clear')) return;
+    
+    if (confirm('⚠️ ¿Eliminar TODOS los empleados? Esta acción no se puede deshacer.')) {
+        localStorage.removeItem('companyEmployees');
+        employees = [];
+        displayEmployees();
+        updateFilters();
+        updateStats();
+        alert('Todos los datos han sido eliminados.');
+    }
+}
 
-        function reportCorrections() {
-            const to = 'lnieves@barceloneta.pr.gov';
-            const cc = 'ebatista@barceloneta.pr.gov';
-            const subject = 'Solicitud de corrección';
-            window.location.href = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}`;
-        }
+function reportCorrections() {
+    const to = 'lnieves@barceloneta.pr.gov';
+    const cc = 'ebatista@barceloneta.pr.gov';
+    const subject = 'Solicitud de corrección';
+    window.location.href = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}`;
+}
 
+        // Cerrar modal al hacer clic fuera de él
         window.onclick = function(event) {
             const modal = document.getElementById('employeeModal');
             if (event.target === modal) {
@@ -1086,1137 +1251,3 @@
     </script>
 </body>
 </html>
-```
-</attachment>
-
-</attachments>
-<context>
-The current date is September 1, 2025.
-</context>
-<editorContext>
-The user's current file is /Users/luisdaniel/Downloads/Nuevo Directorio V2/public/index.html. 
-</editorContext>
-<repoContext>
-Below is the information about the current repository. You can use this information when you need to calculate diffs or compare changes with the default branch.
-Repository name: Directorio-municipal
-Owner: dannynieves750
-Current branch: main
-
-</repoContext>
-<reminderInstructions>
-
-</reminderInstructions>
-<userRequest>
-puedes verificar el codigo de save-data.mjs
-</userRequest>// filepath: /public/index.html
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Directorio de Empleados - Municipio de Barceloneta</title>
-    <link rel="icon" type="image/png" href="logo-barceloneta.png">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #edf2f4;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(39,41,60,0.08);
-            overflow: hidden;
-            position: relative;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #27293c 0%, #8d99ae 100%);
-            color: #fff;
-            padding: 30px;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 5px;
-        }
-
-        .header h2 {
-            font-size: 1.5em;
-            margin-bottom: 10px;
-        }
-
-        .controls {
-            padding: 30px;
-            background: #f7fafa;
-            border-bottom: 1px solid #8d99ae;
-        }
-
-        .permission-warning {
-            background: #fcd3d8;
-            color: #a30000;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .search-bar {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
-        .search-bar input, .search-bar select {
-            padding: 12px;
-            border: 2px solid #8d99ae;
-            border-radius: 5px;
-            font-size: 16px;
-            flex: 1;
-            min-width: 200px;
-            background: #f7fafa;
-            color: #2b2d42;
-        }
-
-        .search-bar input:focus, .search-bar select:focus {
-            outline: none;
-            border-color: #ef233c;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: #27293c;
-            color: #fff;
-        }
-
-        .btn-primary:hover {
-            background: #8d99ae;
-            color: #27293c;
-        }
-
-        .btn-success {
-            background: #2b2d42;
-            color: #fff;
-        }
-
-        .btn-success:hover {
-            background: #8d99ae;
-            color: #2b2d42;
-        }
-
-        .btn-danger {
-            background: #f7fafa;
-            color: #a30000;
-            border: 1px solid #a30000;
-        }
-
-        .btn-danger:hover {
-            background: #ef233c;
-            color: #fff;
-        }
-
-        .btn-report {
-            background: #ffc107;
-            color: #212529;
-        }
-        .btn-report:hover {
-            background: #ffca2c;
-            color: #212529;
-        }
-
-        .employee-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            padding: 30px;
-        }
-
-        .employee-card {
-            background: #fff;
-            border: 1px solid #8d99ae;
-            border-radius: 10px;
-            padding: 20px;
-            transition: all 0.3s;
-            box-shadow: 0 2px 5px rgba(39,41,60,0.05);
-        }
-
-        .employee-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(39,41,60,0.12);
-        }
-
-        .employee-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .employee-avatar {
-            width: 60px;
-            height: 60px;
-            background: #a30000;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-size: 24px;
-            font-weight: bold;
-            margin-right: 15px;
-        }
-
-        .employee-info h3 {
-            color: #27293c;
-            margin-bottom: 5px;
-        }
-
-        .employee-info p {
-            color: #8d99ae;
-            font-size: 14px;
-        }
-
-        .employee-details {
-            border-top: 1px solid #edf2f4;
-            padding-top: 15px;
-        }
-
-        .detail-row {
-            display: flex;
-            margin-bottom: 8px;
-            align-items: center;
-        }
-
-        .detail-label {
-            font-weight: bold;
-            color: #2b2d42;
-            min-width: 80px;
-            font-size: 14px;
-        }
-
-        .detail-value {
-            color: #27293c;
-            font-size: 14px;
-        }
-
-        .detail-value a {
-            color: #58CCED;
-            text-decoration: none;
-        }
-
-        .detail-value a:hover {
-            text-decoration: underline;
-        }
-
-        .employee-actions {
-            margin-top: 15px;
-            display: flex;
-            gap: 10px;
-        }
-
-        .btn-small {
-            padding: 6px 12px;
-            font-size: 12px;
-            border-radius: 3px;
-        }
-
-        .btn-info {
-            background: #edf2f4;
-            color: #2b2d42;
-            font-weight: bold;
-        }
-
-        .btn-warning {
-            background: #ef233c;
-            color: #fff;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(39,41,60,0.5);
-            z-index: 1000;
-        }
-
-        .modal-content {
-            background: #fff;
-            margin: 5% auto;
-            padding: 30px;
-            width: 90%;
-            max-width: 500px;
-            border-radius: 10px;
-            position: relative;
-        }
-
-        .close {
-            position: absolute;
-            top: 15px;
-            right: 20px;
-            font-size: 24px;
-            cursor: pointer;
-            color: #8d99ae;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #27293c;
-        }
-
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #8d99ae;
-            border-radius: 5px;
-            font-size: 16px;
-            background: #f7fafa;
-            color: #2b2d42;
-        }
-
-        .stats {
-            background: #a30000;
-            color: #fff;
-            padding: 20px;
-            text-align: center;
-        }
-
-        /* Sistema de Login */
-        .login-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(39,41,60,0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-        }
-
-        .login-box {
-            background: #fff;
-            padding: 40px;
-            border-radius: 10px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(39,41,60,0.18);
-            max-width: 400px;
-            width: 90%;
-        }
-
-        .login-box h2 {
-            color: #ef233c;
-            margin-bottom: 20px;
-        }
-
-        .login-input {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            border: 2px solid #8d99ae;
-            border-radius: 5px;
-            font-size: 16px;
-            background: #f7fafa;
-            color: #2b2d42;
-        }
-
-        .login-btn {
-            background: #ef233c;
-            color: #fff;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            width: 100%;
-            margin-top: 10px;
-        }
-
-        .login-btn:hover {
-            background: #d90429;
-        }
-
-        .user-info {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(237,242,244,0.9);
-            padding: 10px 15px;
-            border-radius: 20px;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .logout-btn {
-            background: #f7fafa;
-            color: #a30000;
-            border: 1px solid #a30000;
-            padding: 5px 10px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
-        .logout-btn:hover {
-            background: #ef233c;
-            color: #fff;
-        }
-
-        @media (max-width: 768px) {
-            .search-bar {
-                flex-direction: column;
-            }
-            
-            .btn-group {
-                flex-direction: column;
-            }
-            
-            .employee-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .user-info {
-                position: relative;
-                top: auto;
-                right: auto;
-                margin-bottom: 20px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <!-- Sistema de Login -->
-    <div id="loginContainer" class="login-container">
-        <div class="login-box">
-            <h2>🔐 Acceso al Sistema</h2>
-            <div style="margin-bottom: 20px; color: #666; text-align: center;">
-                <div style="font-weight: bold; font-size: 1.2em; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    Directorio de Empleados
-                    <img src="logo-barceloneta.png" alt="Logo Barceloneta" style="height: 42px; width: auto; vertical-align: middle;" />
-                </div>
-                <div style="font-size: 1em;">Municipio de Barceloneta</div>
-            </div>
-            <input type="text" id="loginUser" class="login-input" placeholder="Usuario" autocomplete="username">
-            <input type="password" id="loginPassword" class="login-input" placeholder="Contraseña" autocomplete="current-password">
-            <button class="login-btn" onclick="attemptLogin()"> LOG IN</button>
-            <div id="loginError" style="color: red; margin-top: 10px; display: none;"></div>
-            
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #999;">
-                <strong>Oficina de Sistema de Información</strong><br>
-            </div>
-        </div>
-    </div>
-
-    <!-- Sistema Principal -->
-    <div class="container" id="mainContainer" style="display: none;">
-        <!-- Información del usuario logueado -->
-        <div class="user-info">
-            <span id="currentUser"></span>
-            <span id="userRole" class="btn-small"></span>
-            <button class="logout-btn" onclick="logout()">🚪 Salir</button>
-        </div>
-
-       <div class="header">
-            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 20px; flex-wrap: wrap;">
-                <img src="logo-barceloneta.png" alt="Logo" style="width: 100px; height: 120px;">
-                <div>
-                    <h1>Directorio de Empleados</h1>
-                    <h2>Municipio de Barceloneta</h2>
-                    <p>Sistema de gestión de contactos municipales</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="stats">
-            <p>Total de empleados: <span id="totalEmployees">0</span> | Departamentos: <span id="totalDepartments">0</span></p>
-        </div>
-
-        <div class="controls">
-            <div class="permission-warning" id="permissionWarning">
-                ⚠️ Solo tienes permisos de lectura. No puedes modificar los datos.
-            </div>
-            <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="🔍 Buscar por nombre, depto, email o teléfono...">
-                <select id="departmentFilter">
-                    <option value="">Todos los departamentos</option>
-                </select>
-                <select id="positionFilter">
-                    <option value="">Todos los puestos</option>
-                </select>
-            </div>
-            <div class="btn-group" id="adminControls">
-                <button class="btn btn-primary" onclick="openModal()">➕ Agregar Empleado</button>
-                <button class="btn btn-success" onclick="exportData()">💾 Exportar Local</button>
-                <button class="btn btn-primary" onclick="document.getElementById('csvFileInput').click()">📂 Importar CSV</button>
-                <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="importCSV(event)">
-                <button class="btn btn-success" onclick="saveDataToServer()" style="background-color: #2a9d8f;">💾 Guardar Cambios</button>
-                <button class="btn btn-primary" onclick="loadSampleData()" style="font-size: 12px;">Cargar Ejemplo</button>
-                <button class="btn btn-danger" onclick="clearAllData()" style="font-size: 12px;">🗑️ Limpiar Todo</button>
-            </div>
-            <div class="btn-group" id="userControls" style="display: none;">
-                <button class="btn btn-report" onclick="reportCorrections()">📧 Solicitar Correcciones</button>
-            </div>
-        </div>
-
-        <div class="employee-grid" id="employeeGrid">
-            <div style="text-align: center; grid-column: 1/-1; padding: 50px; color: #999;">
-                <h3>No hay empleados registrados</h3>
-                <p>Haz clic en "Agregar Empleado" para comenzar</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal para agregar/editar empleado -->
-    <div id="employeeModal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
-            <h2 id="modalTitle">Agregar Empleado</h2>
-            <form id="employeeForm">
-                <div class="form-group">
-                    <label for="firstName">Nombre:</label>
-                    <input type="text" id="firstName" required>
-                </div>
-                <div class="form-group">
-                    <label for="lastName">Apellido:</label>
-                    <input type="text" id="lastName" required>
-                </div>
-                <div class="form-group">
-                    <label for="email">Email:</label>
-                    <input type="email" id="email">
-                </div>
-                <div class="form-group">
-                    <label for="phone">Teléfono:</label>
-                    <input type="tel" id="phone" required>
-                </div>
-                <div class="form-group">
-                    <label for="department">Departamento:</label>
-                    <input type="text" id="department">
-                </div>
-                <div class="form-group">
-                    <label for="position">Puesto:</label>
-                    <input type="text" id="position">
-                </div>
-                <div class="form-group">
-                    <label for="extension">Extensión:</label>
-                    <input type="text" id="extension">
-                </div>
-                <div class="btn-group">
-                    <button type="submit" class="btn btn-success">💾 Guardar</button>
-                    <button type="button" class="btn btn-danger" onclick="closeModal()">❌ Cancelar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script>
-        let employees = [];
-        let editingIndex = -1;
-        let currentUser = null;
-        let userRole = null;
-
-        // ============================================
-        // SECCIÓN DE USUARIOS - EDITAR AQUÍ
-        // ============================================
-        const users = {
-            'admin': {
-                password: 'munbta2025$',
-                role: 'admin',
-                name: 'Administrador'
-            },
-            'usuario': {
-                password: 'user123',
-                role: 'user',
-                name: 'Usuario'
-            },
-            'director': {
-                password: 'dir2024',
-                role: 'admin',
-                name: 'Director Municipal'
-            },
-            'secretario': {
-                password: 'sec2024',
-                role: 'user',
-                name: 'Secretario'
-            }
-        };
-        // ============================================
-
-        window.onload = async function() {
-            const savedSession = sessionStorage.getItem('userSession');
-            if (savedSession) {
-                const session = JSON.parse(savedSession);
-                if (isValidSession(session) && session.role === 'admin') {
-                    loginUser(session.username, session.role, session.name);
-                    return;
-                }
-            }
-            setupGuestUserView();
-        };
-
-        function setupGuestUserView() {
-            loginUser('guest', 'user', 'Invitado');
-        }
-
-        function isValidSession(session) {
-            const now = new Date().getTime();
-            const sessionTime = new Date(session.timestamp).getTime();
-            const eightHours = 8 * 60 * 60 * 1000;
-            return (now - sessionTime) < eightHours;
-        }
-
-        function showLoginScreen() {
-            document.getElementById('loginContainer').style.display = 'flex';
-            document.getElementById('mainContainer').style.display = 'none';
-        }
-
-        function attemptLogin() {
-            const username = document.getElementById('loginUser').value.trim();
-            const password = document.getElementById('loginPassword').value;
-            const errorDiv = document.getElementById('loginError');
-
-            if (!username || !password) {
-                showLoginError('Por favor ingrese usuario y contraseña');
-                return;
-            }
-
-            if (users[username] && users[username].password === password) {
-                const user = users[username];
-                loginUser(username, user.role, user.name);
-                
-                const session = {
-                    username: username,
-                    role: user.role,
-                    name: user.name,
-                    timestamp: new Date().toISOString()
-                };
-                sessionStorage.setItem('userSession', JSON.stringify(session));
-                errorDiv.style.display = 'none';
-            } else {
-                showLoginError('Usuario o contraseña incorrectos');
-            }
-        }
-
-        function showLoginError(message) {
-            const errorDiv = document.getElementById('loginError');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-
-        async function loginUser(username, role, name) {
-            currentUser = username;
-            userRole = role;
-            
-            document.getElementById('loginContainer').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
-            
-            document.getElementById('currentUser').textContent = name;
-            const roleSpan = document.getElementById('userRole');
-            const logoutBtn = document.querySelector('.logout-btn');
-
-            if (role === 'admin') {
-                roleSpan.textContent = 'Administrador';
-                logoutBtn.innerHTML = '🚪 Salir';
-            } else {
-                roleSpan.textContent = 'Solo Lectura';
-                logoutBtn.innerHTML = '🔑 Acceder';
-            }
-            
-            roleSpan.style.background = role === 'admin' ? '#a30000' : '#c8d8e4';
-            roleSpan.style.color = role === 'admin' ? 'white' : '#2b6777';
-            
-            setupPermissions(role);
-            
-            await loadInitialData();
-        }
-
-        function setupPermissions(role) {
-            const adminControls = document.getElementById('adminControls');
-            const userControls = document.getElementById('userControls');
-            const permissionWarning = document.getElementById('permissionWarning');
-            
-            if (role === 'admin') {
-                adminControls.style.display = 'flex';
-                userControls.style.display = 'none';
-                permissionWarning.style.display = 'none';
-            } else {
-                adminControls.style.display = 'none';
-                userControls.style.display = 'flex';
-                permissionWarning.style.display = 'block';
-            }
-        }
-
-        function checkPermission(action) {
-            if (userRole !== 'admin') {
-                alert('⚠️ No tienes permisos para realizar esta acción.\nContacta al administrador si necesitas acceso de escritura.');
-                return false;
-            }
-            return true;
-        }
-
-        function logout() {
-            if (userRole !== 'admin') {
-                showLoginScreen();
-                return;
-            }
-            
-            if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
-                sessionStorage.removeItem('userSession');
-                currentUser = null;
-                userRole = null;
-                showLoginScreen();
-                document.getElementById('loginUser').value = '';
-                document.getElementById('loginPassword').value = '';
-            }
-        }
-
-        document.getElementById('loginPassword').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') attemptLogin();
-        });
-
-        document.getElementById('loginUser').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') document.getElementById('loginPassword').focus();
-        });
-
-        async function loadInitialData() {
-            let dataLoaded = false;
-            try {
-                const response = await fetch('/api/get-data');
-                if (response.ok) {
-                    let data = await response.json();
-                    if (Array.isArray(data)) {
-                        employees = data;
-                        dataLoaded = true;
-                    }
-                }
-            } catch (error) {
-                console.warn("No se pudo cargar la API, intentando respaldo...", error);
-            }
-
-            if (!dataLoaded) {
-                const savedData = localStorage.getItem('companyEmployees');
-                if (savedData) {
-                    employees = JSON.parse(savedData);
-                } else {
-                    employees = [];
-                }
-            }
-            
-            displayEmployees();
-            updateFilters();
-            updateStats();
-        }
-
-        function saveEmployees() {
-            localStorage.setItem('companyEmployees', JSON.stringify(employees));
-            updateStats();
-        }
-
-        function displayEmployees(filteredEmployees = null) {
-            const grid = document.getElementById('employeeGrid');
-            const employeesToShow = filteredEmployees || employees;
-
-            if (employeesToShow.length === 0) {
-                grid.innerHTML = `<div style="text-align: center; grid-column: 1/-1; padding: 50px; color: #999;"><h3>No hay empleados que coincidan</h3><p>Intenta ajustar los filtros de búsqueda</p></div>`;
-                return;
-            }
-
-            grid.innerHTML = employeesToShow.map((employee, index) => {
-                const actualIndex = employees.indexOf(employee);
-                return `
-                    <div class="employee-card">
-                        <div class="employee-header">
-                            <div class="employee-avatar">${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}</div>
-                            <div class="employee-info">
-                                <h3>${employee.firstName} ${employee.lastName}</h3>
-                                <p>${employee.position}</p>
-                            </div>
-                        </div>
-                        <div class="employee-details">
-                            <div class="detail-row"><span class="detail-label">Email:</span><span class="detail-value">${employee.email ? `<a href="mailto:${employee.email}">${employee.email}</a>` : 'N/A'}</span></div>
-                            <div class="detail-row"><span class="detail-label">Teléfono:</span><span class="detail-value">${employee.phone}</span></div>
-                            <div class="detail-row"><span class="detail-label">Depto:</span><span class="detail-value">${employee.department}</span></div>
-                            ${employee.extension ? `<div class="detail-row"><span class="detail-label">Ext:</span><span class="detail-value">${employee.extension}</span></div>` : ''}
-                        </div>
-                        <div class="employee-actions" ${userRole !== 'admin' ? 'style="display:none;"' : ''}>
-                            <button class="btn btn-info btn-small" onclick="editEmployee(${actualIndex})">✏️ Editar</button>
-                            <button class="btn btn-danger btn-small" onclick="deleteEmployee(${actualIndex})">🗑️ Eliminar</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function openModal(employee = null, index = -1) {
-            if (!checkPermission('edit')) return;
-            
-            const modal = document.getElementById('employeeModal');
-            const title = document.getElementById('modalTitle');
-            const form = document.getElementById('employeeForm');
-            
-            editingIndex = index;
-            title.textContent = employee ? 'Editar Empleado' : 'Agregar Empleado';
-            
-            if (employee) {
-                document.getElementById('firstName').value = employee.firstName;
-                document.getElementById('lastName').value = employee.lastName;
-                document.getElementById('email').value = employee.email;
-                document.getElementById('phone').value = employee.phone;
-                document.getElementById('department').value = employee.department;
-                document.getElementById('position').value = employee.position;
-                document.getElementById('extension').value = employee.extension || '';
-            } else {
-                form.reset();
-            }
-            
-            modal.style.display = 'block';
-        }
-
-        function closeModal() {
-            document.getElementById('employeeModal').style.display = 'none';
-            editingIndex = -1;
-        }
-
-        document.getElementById('employeeForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const employeeData = {
-                firstName: document.getElementById('firstName').value,
-                lastName: document.getElementById('lastName').value,
-                email: document.getElementById('email').value,
-                phone: document.getElementById('phone').value,
-                department: document.getElementById('department').value,
-                position: document.getElementById('position').value,
-                extension: document.getElementById('extension').value
-            };
-
-            if (editingIndex >= 0) {
-                employees[editingIndex] = employeeData;
-            } else {
-                employees.push(employeeData);
-            }
-
-            saveEmployees();
-            displayEmployees();
-            updateFilters();
-            closeModal();
-            
-            alert(editingIndex >= 0 ? 'Empleado actualizado correctamente' : 'Empleado agregado correctamente');
-        });
-
-        function editEmployee(index) {
-            if (!checkPermission('edit')) return;
-            openModal(employees[index], index);
-        }
-
-        function deleteEmployee(index) {
-            if (!checkPermission('delete')) return;
-            if (confirm('¿Estás seguro de que quieres eliminar este empleado?')) {
-                employees.splice(index, 1);
-                saveEmployees();
-                displayEmployees();
-                updateFilters();
-                alert('Empleado eliminado correctamente');
-            }
-        }
-
-        function updateFilters() {
-            const departmentFilter = document.getElementById('departmentFilter');
-            const positionFilter = document.getElementById('positionFilter');
-            
-            const departments = [...new Set(employees.map(emp => emp.department))].filter(Boolean);
-            const positions = [...new Set(employees.map(emp => emp.position))].filter(Boolean);
-            
-            departmentFilter.innerHTML = '<option value="">Todos los departamentos</option>' +
-                departments.sort().map(dept => `<option value="${dept}">${dept}</option>`).join('');
-            
-            positionFilter.innerHTML = '<option value="">Todos los puestos</option>' +
-                positions.sort().map(pos => `<option value="${pos}">${pos}</option>`).join('');
-        }
-
-        function updateStats() {
-            document.getElementById('totalEmployees').textContent = employees.length;
-            const departments = new Set(employees.map(emp => emp.department).filter(Boolean));
-            document.getElementById('totalDepartments').textContent = departments.size;
-        }
-
-        function filterEmployees() {
-            const removeAccents = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const searchTerm = removeAccents(document.getElementById('searchInput').value.toLowerCase());
-            const departmentFilter = document.getElementById('departmentFilter').value;
-            const positionFilter = document.getElementById('positionFilter').value;
-
-            const filtered = employees.filter(employee => {
-                const matchesSearch = !searchTerm || 
-                    Object.values(employee).some(val => removeAccents(String(val).toLowerCase()).includes(searchTerm));
-                
-                const matchesDepartment = !departmentFilter || employee.department === departmentFilter;
-                const matchesPosition = !positionFilter || employee.position === positionFilter;
-                
-                return matchesSearch && matchesDepartment && matchesPosition;
-            });
-
-            displayEmployees(filtered);
-        }
-
-        document.getElementById('searchInput').addEventListener('input', filterEmployees);
-        document.getElementById('departmentFilter').addEventListener('change', filterEmployees);
-        document.getElementById('positionFilter').addEventListener('change', filterEmployees);
-
-        function importCSV(event) {
-            if (!checkPermission('import')) return;
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                parseCSVData(e.target.result);
-            };
-            reader.readAsText(file);
-        }
-
-        function parseCSVData(csv, isInitialLoad = false) {
-            try {
-                const lines = csv.split('\n');
-                if (lines.length < 2) {
-                    if (!isInitialLoad) alert('El archivo CSV debe tener al menos una fila de encabezados y una de datos.');
-                    return;
-                }
-
-                const separator = csv.includes(';') ? ';' : ',';
-                const headers = lines[0].split(separator).map(h => h.trim().replace(/"/g, '').toLowerCase());
-                
-                const importedEmployees = [];
-                let successCount = 0;
-                let errorCount = 0;
-
-                for (let i = 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-
-                    const values = parseCSVLine(line, separator);
-                    if (values.length < headers.length) {
-                        errorCount++;
-                        continue;
-                    }
-
-                    try {
-                        const employee = {};
-                        headers.forEach((header, index) => {
-                            const value = values[index] ? values[index].trim() : '';
-                            if (header.includes('nombre') && !header.includes('apellido')) employee.firstName = value;
-                            else if (header.includes('apellido')) employee.lastName = value;
-                            else if (header.includes('email')) employee.email = value;
-                            else if (header.includes('teléfono')) employee.phone = value;
-                            else if (header.includes('departamento')) employee.department = value;
-                            else if (header.includes('puesto')) employee.position = value;
-                            else if (header.includes('extensión')) employee.extension = value;
-                        });
-
-                        if (employee.firstName && employee.lastName) {
-                            importedEmployees.push(employee);
-                            successCount++;
-                        } else {
-                            errorCount++;
-                        }
-                    } catch (error) {
-                        errorCount++;
-                    }
-                }
-
-                if (isInitialLoad) {
-                    employees = importedEmployees;
-                } else {
-                    if (importedEmployees.length > 0) {
-                        if (confirm(`Se encontraron ${successCount} empleados válidos. ¿Desea importarlos?`)) {
-                            employees.push(...importedEmployees);
-                            saveEmployees();
-                            displayEmployees();
-                            updateFilters();
-                            alert(`✅ ${successCount} empleados importados.`);
-                        }
-                    } else {
-                        alert('❌ No se encontraron empleados válidos para importar.');
-                    }
-                }
-            } catch (error) {
-                if (!isInitialLoad) alert('❌ Error al procesar el archivo CSV.');
-                console.error('Error parsing CSV:', error);
-            }
-            document.getElementById('csvFileInput').value = '';
-        }
-
-        function parseCSVLine(line, separator) {
-            const values = [];
-            let current = '';
-            let inQuotes = false;
-            for (let i = 0; i < line.length; i++) {
-                const char = line[i];
-                if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === separator && !inQuotes) {
-                    values.push(current.trim().replace(/^"|"$/g, ''));
-                    current = '';
-                } else {
-                    current += char;
-                }
-            }
-            values.push(current.trim().replace(/^"|"$/g, ''));
-            return values;
-        }
-
-        function exportData() {
-            if (employees.length === 0) {
-                alert('No hay datos para exportar');
-                return;
-            }
-            const csvContent = "data:text/csv;charset=utf-8," 
-                + "Nombre,Apellido,Email,Teléfono,Departamento,Puesto,Extensión\n"
-                + employees.map(emp => 
-                    `"${emp.firstName}","${emp.lastName}","${emp.email}","${emp.phone}","${emp.department}","${emp.position}","${emp.extension || ''}"`
-                ).join('\n');
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "directorio_empleados_barceloneta.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        async function saveDataToServer(isInitialLoad = false) {
-            if (!isInitialLoad && !checkPermission('save')) return;
-
-            if (!isInitialLoad && !confirm('¿Estás seguro de que quieres sobrescribir los datos en el servidor?')) {
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/save-data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(employees) 
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    if (!isInitialLoad) {
-                        alert('✅ ¡Éxito! Los datos han sido guardados en el servidor.');
-                        await loadInitialData();
-                    }
-                    saveEmployees();
-                } else {
-                    if (!isInitialLoad) {
-                        alert(`❌ Error al guardar los datos en el servidor.\n\nDetalle: ${result.message}`);
-                    }
-                }
-            } catch (error) {
-                console.error('Error al contactar el servidor:', error);
-                if (!isInitialLoad) {
-                    alert('❌ Error de conexión. No se pudo contactar al servidor.');
-                }
-            }
-        }
-
-        function loadSampleData() {
-            if (!checkPermission('import')) return;
-            if (confirm('¿Cargar datos de ejemplo? Esto agregará empleados de muestra.')) {
-                const sampleData = [
-                    { firstName: "María", lastName: "González", email: "maria.gonzalez@barceloneta.gov.pr", phone: "787-555-0101", department: "Recursos Humanos", position: "Gerente de RRHH", extension: "101" },
-                    { firstName: "Carlos", lastName: "Rodríguez", email: "carlos.rodriguez@barceloneta.gov.pr", phone: "787-555-0102", department: "Sistemas", position: "Desarrollador Senior", extension: "201" },
-                    { firstName: "Ana", lastName: "López", email: "ana.lopez@barceloneta.gov.pr", phone: "787-555-0103", department: "Administración", position: "Secretaria Ejecutiva", extension: "301" }
-                ];
-                employees.push(...sampleData);
-                saveEmployees();
-                displayEmployees();
-                updateFilters();
-                alert('Datos de ejemplo cargados.');
-            }
-        }
-
-        function clearAllData() {
-            if (!checkPermission('clear')) return;
-            if (confirm('⚠️ ¿Eliminar TODOS los empleados? Esta acción no se puede deshacer.')) {
-                localStorage.removeItem('companyEmployees');
-                employees = [];
-                displayEmployees();
-                updateFilters();
-                updateStats();
-                alert('Todos los datos han sido eliminados.');
-            }
-        }
-
-        function reportCorrections() {
-            const to = 'lnieves@barceloneta.pr.gov';
-            const cc = 'ebatista@barceloneta.pr.gov';
-            const subject = 'Solicitud de corrección';
-            window.location.href = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}`;
-        }
-
-        window.onclick = function(event) {
-            const modal = document.getElementById('employeeModal');
-            if (event.target === modal) {
-                closeModal();
-            }
-        }
-    </script>
-</body>
-</html>
-```
-</attachment>
-
-</attachments>
-<context>
-The current date is September 1, 2025.
-</context>
-<editorContext>
-The user's current file is /Users/luisdaniel/Downloads/Nuevo Directorio V2/public/index.html. 
-</editorContext>
-<repoContext>
-Below is the information about the current repository. You can use this information when you need to calculate diffs or compare changes with the default branch.
-Repository name: Directorio-municipal
-Owner: dannynieves750
-Current branch: main
-
-</repoContext>
-<reminderInstructions>
-
-</reminderInstructions>
-<userRequest>
-puedes verificar el codigo de save-data.mjs
-</userRequest>
