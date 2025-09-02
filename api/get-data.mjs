@@ -1,25 +1,26 @@
-import { put } from '@vercel/blob';
+import { get } from '@vercel/blob';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, message: 'Method Not Allowed' });
-  }
+  // Se elimina la validación estricta del método para diagnosticar y resolver el problema en Vercel.
+  // La función ahora se centrará únicamente en obtener los datos.
 
   try {
-    // El cuerpo ya viene como un objeto JSON, solo necesitamos convertirlo a string
-    const data = req.body; 
-    const dataString = JSON.stringify(data, null, 2);
-
-    await put('directorio_empleados_barceloneta.json', dataString, {
-      access: 'public',
-      allowOverwrite: true, // Permite sobrescribir el archivo
+    const blob = await get('directorio_empleados_barceloneta.json', {
       token: process.env.BLOB_READ_WRITE_TOKEN,
     });
 
-    return res.status(200).json({ success: true, message: 'Datos guardados correctamente.' });
+    if (!blob) {
+      // Si el blob no existe, es la primera vez que se ejecuta.
+      // Devolver un array vacío es seguro. El frontend se encargará.
+      return res.status(200).json([]);
+    }
+
+    const data = await blob.json();
+    return res.status(200).json(data);
 
   } catch (error) {
-    console.error('Error al guardar los datos en el blob:', error);
-    return res.status(500).json({ success: false, message: 'Error interno del servidor al guardar los datos.' });
+    console.error('Error al obtener los datos del blob:', error);
+    // Devuelve un mensaje de error claro si algo falla en el servidor.
+    return res.status(500).json({ message: `Error interno del servidor: ${error.message}` });
   }
 }
