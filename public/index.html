@@ -1120,9 +1120,13 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    // Enviamos el array de empleados directamente
                     body: JSON.stringify(employees) 
                 });
+
+                if (!response.ok) {
+                    const errorResult = await response.json();
+                    throw new Error(errorResult.message || `Error del servidor: ${response.status}`);
+                }
 
                 const result = await response.json();
 
@@ -1130,8 +1134,11 @@
                     if (!isInitialLoad) {
                         alert('✅ ¡Éxito! Los datos han sido guardados en el servidor.');
                     }
-                    // Guardamos también en el respaldo local para consistencia
-                    saveEmployees();
+                    // Vuelve a cargar los datos desde el servidor para reflejar los cambios
+                    await loadInitialData(); 
+                    displayEmployees();
+                    updateFilters();
+                    updateStats();
                 } else {
                     if (!isInitialLoad) {
                         alert(`❌ Error al guardar los datos en el servidor.\n\nDetalle: ${result.message}`);
@@ -1140,7 +1147,7 @@
             } catch (error) {
                 console.error('Error al contactar el servidor:', error);
                 if (!isInitialLoad) {
-                    alert('❌ Error de conexión. No se pudo contactar al servidor para guardar los datos.');
+                    alert(`❌ Error de conexión. No se pudo contactar al servidor para guardar los datos.\n\nDetalle: ${error.message}`);
                 }
             }
         }
@@ -1189,16 +1196,14 @@
                 alert('Datos de ejemplo cargados correctamente');
             }
         }
-        function clearAllData() {
+async function clearAllData() {
     if (!checkPermission('clear')) return;
     
-    if (confirm('⚠️ ¿Eliminar TODOS los empleados? Esta acción no se puede deshacer.')) {
-        localStorage.removeItem('companyEmployees');
+    if (confirm('⚠️ ¿Eliminar TODOS los empleados? Esta acción no se puede deshacer y borrará los datos del servidor.')) {
         employees = [];
-        displayEmployees();
-        updateFilters();
-        updateStats();
-        alert('Todos los datos han sido eliminados.');
+        await saveDataToServer(true); // true para saltar la confirmación
+        // La recarga de datos desde el servidor ya está en saveDataToServer
+        alert('Todos los datos han sido eliminados del servidor.');
     }
 }
 
@@ -1219,3 +1224,5 @@ function reportCorrections() {
     </script>
 </body>
 </html>
+
+

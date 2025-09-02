@@ -1,25 +1,25 @@
-// filepath: /api/get-data.mjs
-import { get } from '@vercel/blob';
+import { put } from '@vercel/blob';
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Método no permitido' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, message: 'Method Not Allowed' });
   }
 
   try {
-    const blob = await get('directorio_empleados_barceloneta.json', {
-      token: process.env.BLOB_READ_WRITE_TOKEN
-    });
-    
-    if (!blob) {
-      return res.status(200).json([]);
-    }
+    // El cuerpo ya viene como un objeto JSON, solo necesitamos convertirlo a string
+    const data = req.body; 
+    const dataString = JSON.stringify(data, null, 2);
 
-    const data = await blob.text();
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(200).send(data);
+    await put('directorio_empleados_barceloneta.json', dataString, {
+      access: 'public',
+      allowOverwrite: true, // Permite sobrescribir el archivo
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+
+    return res.status(200).json({ success: true, message: 'Datos guardados correctamente.' });
 
   } catch (error) {
-    return res.status(500).json({ error: 'Error al leer datos del blob.', details: error.message });
+    console.error('Error al guardar los datos en el blob:', error);
+    return res.status(500).json({ success: false, message: 'Error interno del servidor al guardar los datos.' });
   }
 }
