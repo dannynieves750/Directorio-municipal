@@ -908,8 +908,8 @@
             const departmentFilter = document.getElementById('departmentFilter');
             const positionFilter = document.getElementById('positionFilter');
             
-            const departments = [...new Set(employees.map(emp => emp.department))];
-            const positions = [...new Set(employees.map(emp => emp.position))];
+            const departments = [...new Set(employees.map(emp => emp.department))].filter(d => d).sort((a, b) => a.localeCompare(b, 'es'));
+            const positions = [...new Set(employees.map(emp => emp.position))].filter(p => p).sort((a, b) => a.localeCompare(b, 'es'));
             
             departmentFilter.innerHTML = '<option value="">Todos los departamentos</option>' +
                 departments.map(dept => `<option value="${dept}">${dept}</option>`).join('');
