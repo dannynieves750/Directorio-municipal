@@ -1,16 +1,32 @@
 import { put } from '@vercel/blob';
 
+const ALLOWED_ORIGIN = 'https://directorio-municipal.vercel.app';
+
 export default async function handler(req, res) {
+  // CORS - solo permitir el origen oficial
+  res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, message: 'Method Not Allowed' });
+    return res.status(405).json({ success: false, message: 'Método no permitido.' });
+  }
+
+  // Bloquear peticiones que no vengan del sitio oficial
+  const origin = req.headers.origin;
+  if (origin !== ALLOWED_ORIGIN) {
+    return res.status(403).json({ success: false, message: 'Acceso denegado.' });
   }
 
   try {
     const data = req.body;
 
-    // Verificación: Asegurarse de que los datos son un array antes de guardar.
     if (!Array.isArray(data)) {
-      throw new Error('Los datos recibidos no son un array válido.');
+      return res.status(400).json({ success: false, message: 'Formato de datos inválido.' });
     }
 
     const dataString = JSON.stringify(data, null, 2);
@@ -25,6 +41,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Error al guardar los datos en el blob:', error);
-    return res.status(500).json({ success: false, message: `Error interno del servidor: ${error.message}` });
+    return res.status(500).json({ success: false, message: 'Error interno del servidor.' });
   }
 }
