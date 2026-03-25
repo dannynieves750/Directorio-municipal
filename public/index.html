@@ -908,8 +908,8 @@
             const departmentFilter = document.getElementById('departmentFilter');
             const positionFilter = document.getElementById('positionFilter');
             
-            const departments = [...new Set(employees.map(emp => emp.department))].filter(d => d).sort((a, b) => a.localeCompare(b, 'es'));
-            const positions = [...new Set(employees.map(emp => emp.position))].filter(p => p).sort((a, b) => a.localeCompare(b, 'es'));
+            const departments = [...new Set(employees.map(emp => emp.department))].filter(d => d && d.trim()).sort((a, b) => a.localeCompare(b, 'es'));
+            const positions = [...new Set(employees.map(emp => emp.position))].filter(p => p && p.trim()).sort((a, b) => a.localeCompare(b, 'es'));
             
             departmentFilter.innerHTML = '<option value="">Todos los departamentos</option>' +
                 departments.map(dept => `<option value="${dept}">${dept}</option>`).join('');
@@ -1016,13 +1016,8 @@
                         });
 
                         if (employee.firstName && employee.lastName && employee.phone) {
-                            const exists = employee.email && employees.some(emp => emp.email && emp.email.toLowerCase() === employee.email.toLowerCase());
-                            if (!exists) {
-                                importedEmployees.push(employee);
-                                successCount++;
-                            } else {
-                                errorCount++;
-                            }
+                            importedEmployees.push(employee);
+                            successCount++;
                         } else {
                             errorCount++;
                         }
@@ -1039,12 +1034,13 @@
                     saveEmployees();
                 } else {
                     if (importedEmployees.length > 0) {
-                        if (confirm(`Se encontraron ${successCount} empleados válidos para importar${errorCount > 0 ? ` y ${errorCount} registros con errores` : ''}.\n\n¿Desea proceder con la importación?`)) {
-                            employees.push(...importedEmployees);
+                        if (confirm(`Se encontraron ${successCount} empleados válidos para importar${errorCount > 0 ? ` y ${errorCount} registros con errores` : ''}.\n\n⚠️ Esto reemplazará todos los datos actuales con los del CSV.\n\n¿Desea proceder?`)) {
+                            employees = importedEmployees;
                             saveEmployees();
                             displayEmployees();
                             updateFilters();
-                            alert(`✅ Importación completada:\n• ${successCount} empleados importados correctamente${errorCount > 0 ? `\n• ${errorCount} registros omitidos por errores` : ''}`);
+                            updateStats();
+                            alert(`✅ Importación completada:\n• ${successCount} empleados cargados correctamente${errorCount > 0 ? `\n• ${errorCount} registros omitidos por errores` : ''}`);
                         }
                     } else {
                         alert('❌ No se encontraron empleados válidos para importar.\n\nVerifique que el archivo CSV tenga las columnas: Nombre, Apellido, Email, Teléfono, Departamento, Puesto');
