@@ -884,7 +884,7 @@
             displayEmployees();
             updateFilters();
             closeModal();
-            
+            autoSaveToServer();
             alert(editingIndex >= 0 ? 'Empleado actualizado correctamente' : 'Empleado agregado correctamente');
         });
 
@@ -900,6 +900,7 @@
                 saveEmployees();
                 displayEmployees();
                 updateFilters();
+                autoSaveToServer();
                 alert('Empleado eliminado correctamente');
             }
         }
@@ -1095,6 +1096,18 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        }
+
+        async function autoSaveToServer() {
+            try {
+                await fetch('/api/save-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(employees)
+                });
+            } catch (error) {
+                console.error('Error al guardar automáticamente:', error);
+            }
         }
 
         async function saveDataToServer(isInitialLoad = false) {
